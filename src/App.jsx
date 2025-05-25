@@ -1,7 +1,10 @@
 import React, { useState } from "react";
+import { HashRouter, Routes, Route } from "react-router-dom";
 import PinLogin from "./components/PinLogin";
 import Dashboard from "./components/Dashboard";
-import PlayerSearch from "./components/PlayerSearch"; // Adjust path as needed
+import PlayerSearch from "./components/PlayerSearch";
+import ConfirmMatch from "./components/ConfirmMatch";
+// import CounterPropose from "./components/CounterPropose"; // for later
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -22,9 +25,7 @@ function App() {
   // Called when a player is selected from the search
   const handlePlayerSelected = (player) => {
     setShowPlayerSearch(false);
-    // TODO: Show availability popup or next step
     alert(`You selected: ${player.firstName} ${player.lastName}`);
-    // You can now show the availability modal or continue scheduling
   };
 
   // Called when player search is closed/canceled
@@ -32,27 +33,40 @@ function App() {
     setShowPlayerSearch(false);
   };
 
-  return (
-    <div>
-      {!isAuthenticated ? (
-        <PinLogin onSuccess={handleLoginSuccess} />
-      ) : (
-        <>
-          <Dashboard
-            playerName={userName}
-            onScheduleMatch={handleScheduleMatch}
-            onOpenChat={() => alert("Chat coming soon!")}
-          />
-          {showPlayerSearch && (
-            <PlayerSearch
-              onSelect={handlePlayerSelected}
-              onClose={handleClosePlayerSearch}
-              excludeName={userName}
+  // Main app content (login/dashboard/player search)
+  function MainApp() {
+    return (
+      <div>
+        {!isAuthenticated ? (
+          <PinLogin onSuccess={handleLoginSuccess} />
+        ) : (
+          <>
+            <Dashboard
+              playerName={userName}
+              onScheduleMatch={handleScheduleMatch}
+              onOpenChat={() => alert("Chat coming soon!")}
             />
-          )}
-        </>
-      )}
-    </div>
+            {showPlayerSearch && (
+              <PlayerSearch
+                onSelect={handlePlayerSelected}
+                onClose={handleClosePlayerSearch}
+                excludeName={userName}
+              />
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <HashRouter>
+      <Routes>
+        <Route path="/" element={<MainApp />} />
+        <Route path="/confirm-match" element={<ConfirmMatch />} />
+        {/* <Route path="/counter-propose" element={<CounterPropose />} /> */}
+      </Routes>
+    </HashRouter>
   );
 }
 

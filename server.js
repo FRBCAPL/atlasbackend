@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const mongoose = require('mongoose'); // <-- ADD THIS LINE!
+const mongoose = require('mongoose');
 const { StreamChat } = require('stream-chat');
 
 const app = express();
@@ -41,6 +41,13 @@ const matchSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 const Match = mongoose.model('Match', matchSchema);
+
+// --- NOTES SCHEMA & MODEL ---
+const noteSchema = new mongoose.Schema({
+  text: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+const Note = mongoose.model('Note', noteSchema);
 
 // --- STREAM CHAT SETUP (existing code) ---
 const apiKey = process.env.STREAM_API_KEY;
@@ -202,6 +209,44 @@ app.get('/api/matches', async (req, res) => {
   } catch (err) {
     console.error('Error fetching matches:', err);
     res.status(500).json({ error: 'Failed to fetch matches' });
+  }
+});
+
+// --- NOTES API ---
+// Get all notes (newest first)
+app.get('/api/notes', async (req, res) => {
+  try {
+    const notes = await Note.find().sort({ createdAt: -1 });
+    res.json(notes);
+  } catch (err) {
+    console.error('Error fetching notes:', err);
+    res.status(500).json({ error: 'Failed to fetch notes' });
+  }
+});
+
+// Add a new note
+app.post('/api/notes', async (req, res) => {
+  try {
+    if (!req.body.text || !req.body.text.trim()) {
+      return res.status(400).json({ error: 'Note text required' });
+    }
+    const note = new Note({ text: req.body.text.trim() });
+    await note.save();
+    res.status(201).json(note);
+  } catch (err) {
+    console.error('Error saving note:', err);
+    res.status(500).json({ error: 'Failed to save note' });
+  }
+});
+
+// Delete a note by ID
+app.delete('/api/notes/:id', async (req, res) => {
+  try {
+    await Note.findByIdAndDelete(req.params.id);
+    res.status(204).end();
+  } catch (err) {
+    console.error('Error deleting note:', err);
+    res.status(500).json({ error: 'Failed to delete note' });
   }
 });
 

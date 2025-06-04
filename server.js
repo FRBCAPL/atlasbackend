@@ -1,16 +1,16 @@
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+require('dotenv').config();
+const mongoose = require('mongoose'); // <-- ADD THIS LINE!
 const { StreamChat } = require('stream-chat');
-const mongoose = require('mongoose');
+
 const app = express();
 
-// --- Place the new CORS config here ---
 const allowedOrigins = [
-  'https://frbcapl.github.io', // Production
-  'http://localhost:3000'      // Local development
+  'https://frbcapl.github.io',
+  'http://localhost:5173',
+  'http://localhost:3000'
 ];
-
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -204,7 +204,6 @@ app.get('/api/matches', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch matches' });
   }
 });
-
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

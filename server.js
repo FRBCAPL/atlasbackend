@@ -42,6 +42,22 @@ const matchSchema = new mongoose.Schema({
 });
 const Match = mongoose.model('Match', matchSchema);
 
+// --- PROPOSAL SCHEMA & MODEL ---
+const proposalSchema = new mongoose.Schema({
+  sender: String,         // sender email
+  receiver: String,       // receiver email
+  senderName: String,
+  receiverName: String,
+  date: String,           // "YYYY-MM-DD"
+  location: String,
+  message: String,
+  gameType: String,
+  raceLength: Number,
+  status: { type: String, default: "pending" }, // "pending", "confirmed", "declined"
+  createdAt: { type: Date, default: Date.now }
+});
+const Proposal = mongoose.model('Proposal', proposalSchema);
+
 // --- NOTES SCHEMA & MODEL ---
 const noteSchema = new mongoose.Schema({
   text: { type: String, required: true },
@@ -107,6 +123,8 @@ app.post('/create-user', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// --- UPDATED /propose-match ROUTE ---
 app.post('/propose-match', async (req, res) => {
   const { userId1, userId2, userName1, userName2, matchDate } = req.body;
   if (!userId1 || !userId2) return res.status(400).json({ error: 'Missing user IDs' });
@@ -152,8 +170,30 @@ app.post('/propose-match', async (req, res) => {
       return res.status(500).json({ error: 'Failed to add members to match chat channel', details: err.message });
     }
   }
+
+  // --- NEW: Save proposal to MongoDB for dashboard tracking ---
+  try {
+    const proposal = new Proposal({
+      sender: userId1,
+      receiver: userId2,
+      senderName: userName1 || userId1,
+      receiverName: userName2 || userId2,
+      date: matchDate,
+      location: req.body.location || "",
+      message: req.body.message || "",
+      gameType: req.body.gameType || "8 Ball",
+      raceLength: req.body.raceLength || 7,
+      status: "pending"
+    });
+    await proposal.save();
+  } catch (err) {
+    console.error("Error saving proposal to MongoDB:", err);
+    // Don't fail the whole request if this part fails
+  }
+
   res.json({ success: true, channelId });
 });
+
 app.post('/make-admin', async (req, res) => {
   let { userId } = req.body;
   if (!userId) return res.status(400).json({ error: 'Missing userId' });
@@ -211,6 +251,56 @@ app.get('/api/matches', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch matches' });
   }
 });
+
+// --- PROPOSALS API (NEW) ---
+// Create a match proposal (optional, for future use)
+app.post('/api/proposals', async (req, res) => {
+  console.log("Received /api/proposals POST:", req.body);
+  try {
+    const {
+      sender, receiver, senderName, receiverName,
+      date, location, message, gameType, raceLength
+    } = req.body;
+
+    if (!sender || !receiver || !senderName || !receiverName || !date || !location) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const proposal = new Proposal({
+      sender,
+      receiver,
+      senderName,
+      receiverName,
+      date,
+      location,
+      message: message || "",
+      gameType: gameType || "8 Ball",
+      raceLength: raceLength || 7,
+      status: "pending"
+    });
+
+    await proposal.save();
+    res.status(201).json({ success: true, proposalId: proposal._id });
+  } catch (err) {
+    console.error("Error saving proposal:", err);
+    res.status(500).json({ error: "Failed to create proposal" });
+  }
+});
+ // <-- Closing brace added here
+
+// Fetch all pending proposals for a player (by receiver email)
+app.get("/api/proposals", async (req, res) => {
+  try {
+    const { receiver } = req.query;
+    if (!receiver) return res.status(400).json({ error: "Missing receiver" });
+    const proposals = await Proposal.find({ receiver, status: "pending" }).sort({ createdAt: -1 });
+    res.json(proposals);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch proposals" });
+  }
+});
+
 
 // --- NOTES API ---
 // Get all notes (newest first)

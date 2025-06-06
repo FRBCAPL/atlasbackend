@@ -286,7 +286,6 @@ app.post('/api/proposals', async (req, res) => {
     res.status(500).json({ error: "Failed to create proposal" });
   }
 });
- // <-- Closing brace added here
 
 // Fetch all pending proposals for a player (by receiver email)
 app.get("/api/proposals", async (req, res) => {
@@ -301,6 +300,40 @@ app.get("/api/proposals", async (req, res) => {
   }
 });
 
+// --- NEW: Fetch all pending proposals for a player (by receiver name)
+app.get("/api/proposals/by-name", async (req, res) => {
+  try {
+    const { receiverName } = req.query;
+    if (!receiverName) return res.status(400).json({ error: "Missing receiverName" });
+    const proposals = await Proposal.find({ receiverName, status: "pending" }).sort({ createdAt: -1 });
+    res.json(proposals);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch proposals" });
+  }
+});
+
+// PATCH proposal status
+app.patch('/api/proposals/:id/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!["pending", "confirmed", "declined"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+    const proposal = await Proposal.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+    if (!proposal) {
+      return res.status(404).json({ error: "Proposal not found" });
+    }
+    res.json({ success: true, proposal });
+  } catch (err) {
+    console.error("Error updating proposal status:", err);
+    res.status(500).json({ error: "Failed to update proposal status" });
+  }
+});
 
 // --- NOTES API ---
 // Get all notes (newest first)
@@ -343,24 +376,4 @@ app.delete('/api/notes/:id', async (req, res) => {
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Stream token server running on port ${PORT}`);
-});
-app.patch('/api/proposals/:id/status', async (req, res) => {
-  try {
-    const { status } = req.body;
-    if (!["pending", "confirmed", "declined"].includes(status)) {
-      return res.status(400).json({ error: "Invalid status" });
-    }
-    const proposal = await Proposal.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    );
-    if (!proposal) {
-      return res.status(404).json({ error: "Proposal not found" });
-    }
-    res.json({ success: true, proposal });
-  } catch (err) {
-    console.error("Error updating proposal status:", err);
-    res.status(500).json({ error: "Failed to update proposal status" });
-  }
 });

@@ -344,3 +344,23 @@ const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Stream token server running on port ${PORT}`);
 });
+app.patch('/api/proposals/:id/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!["pending", "confirmed", "declined"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+    const proposal = await Proposal.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+    if (!proposal) {
+      return res.status(404).json({ error: "Proposal not found" });
+    }
+    res.json({ success: true, proposal });
+  } catch (err) {
+    console.error("Error updating proposal status:", err);
+    res.status(500).json({ error: "Failed to update proposal status" });
+  }
+});

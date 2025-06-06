@@ -1,4 +1,3 @@
-// server.js (or index.js)
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
@@ -27,7 +26,7 @@ app.use(express.json());
 
 // --- MONGODB SETUP (Optimized) ---
 mongoose.connect(process.env.MONGO_URI, {
-  maxPoolSize: 20, // Increase pool size for more concurrent users
+  maxPoolSize: 20,
   serverSelectionTimeoutMS: 5000,
 })
   .then(() => console.log("MongoDB is connected!"))
@@ -45,22 +44,31 @@ const matchSchema = new mongoose.Schema({
   raceLength: String,
   createdAt: { type: Date, default: Date.now }
 });
-matchSchema.index({ player: 1, opponent: 1, date: 1 }); // For fast lookups
+matchSchema.index({ player: 1, opponent: 1, date: 1 });
 const Match = mongoose.model('Match', matchSchema);
 
-// --- PROPOSAL SCHEMA & INDEXES ---
+// --- PROPOSAL SCHEMA & INDEXES (with counterProposal) ---
 const proposalSchema = new mongoose.Schema({
-  sender: String,         // sender email
-  receiver: String,       // receiver email
+  sender: String,
+  receiver: String,
   senderName: String,
   receiverName: String,
-  date: String,           // "YYYY-MM-DD"
+  date: String,
+  time: String,
   location: String,
   message: String,
   gameType: String,
   raceLength: Number,
-  status: { type: String, default: "pending" }, // "pending", "confirmed", "declined"
-  createdAt: { type: Date, default: Date.now }
+  status: { type: String, default: "pending" }, // "pending", "confirmed", "declined", "countered"
+  createdAt: { type: Date, default: Date.now },
+  counterProposal: {
+    date: String,
+    time: String,
+    location: String,
+    note: String,
+    from: String,
+    createdAt: { type: Date, default: Date.now }
+  }
 });
 proposalSchema.index({ receiverName: 1, status: 1 });
 proposalSchema.index({ receiver: 1, status: 1 });
@@ -142,7 +150,6 @@ app.post('/propose-match', async (req, res) => {
   const channelId = getMatchChannelId(userId1, userId2);
 
   try {
-    // Parallelize upserts and proposal save
     await Promise.all([
       serverClient.upsertUser({ id: cleanedUserId1, name: userName1 || userId1 }),
       serverClient.upsertUser({ id: cleanedUserId2, name: userName2 || userId2 }),
@@ -219,7 +226,6 @@ app.post('/make-admin', async (req, res) => {
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 // --- MATCH STORAGE API ---
-// Save a confirmed match
 app.post('/api/matches', async (req, res) => {
   try {
     const match = new Match(req.body);
@@ -231,7 +237,6 @@ app.post('/api/matches', async (req, res) => {
   }
 });
 
-// Get upcoming matches for a player (use .lean() for faster reads)
 app.get('/api/matches', async (req, res) => {
   const { player } = req.query;
   if (!player) return res.status(400).json({ error: 'Missing player' });
@@ -249,7 +254,7 @@ app.get('/api/matches', async (req, res) => {
           now
         ]
       }
-    }).sort({ date: 1, time: 1 }).lean(); // Use lean for speed
+    }).sort({ date: 1, time: 1 }).lean();
 
     res.json(matches);
   } catch (err) {
@@ -258,14 +263,14 @@ app.get('/api/matches', async (req, res) => {
   }
 });
 
-// --- PROPOSALS API (NEW) ---
-// Create a match proposal (optional, for future use)
+// --- PROPOSALS API ---
+// Create a match proposal
 app.post('/api/proposals', async (req, res) => {
   console.log("Received /api/proposals POST:", req.body);
   try {
     const {
       sender, receiver, senderName, receiverName,
-      date, location, message, gameType, raceLength
+      date, time, location, message, gameType, raceLength
     } = req.body;
 
     if (!sender || !receiver || !senderName || !receiverName || !date || !location) {
@@ -278,6 +283,7 @@ app.post('/api/proposals', async (req, res) => {
       senderName,
       receiverName,
       date,
+      time,
       location,
       message: message || "",
       gameType: gameType || "8 Ball",
@@ -293,12 +299,15 @@ app.post('/api/proposals', async (req, res) => {
   }
 });
 
-// Fetch all pending proposals for a player (by receiver email)
+// Fetch all pending/countered proposals for a player (by receiver email)
 app.get("/api/proposals", async (req, res) => {
   try {
     const { receiver } = req.query;
     if (!receiver) return res.status(400).json({ error: "Missing receiver" });
-    const proposals = await Proposal.find({ receiver, status: "pending" }).sort({ createdAt: -1 }).lean();
+    const proposals = await Proposal.find({
+      receiver,
+      status: { $in: ["pending", "countered"] }
+    }).sort({ createdAt: -1 }).lean();
     res.json(proposals);
   } catch (err) {
     console.error(err);
@@ -306,12 +315,15 @@ app.get("/api/proposals", async (req, res) => {
   }
 });
 
-// --- NEW: Fetch all pending proposals for a player (by receiver name)
+// Fetch all pending/countered proposals for a player (by receiver name)
 app.get("/api/proposals/by-name", async (req, res) => {
   try {
     const { receiverName } = req.query;
     if (!receiverName) return res.status(400).json({ error: "Missing receiverName" });
-    const proposals = await Proposal.find({ receiverName, status: "pending" }).sort({ createdAt: -1 }).lean();
+    const proposals = await Proposal.find({
+      receiverName,
+      status: { $in: ["pending", "countered"] }
+    }).sort({ createdAt: -1 }).lean();
     res.json(proposals);
   } catch (err) {
     console.error(err);
@@ -341,8 +353,29 @@ app.patch('/api/proposals/:id/status', async (req, res) => {
   }
 });
 
+// PATCH counter-propose
+app.patch('/api/proposals/:id/counter', async (req, res) => {
+  try {
+    const { date, time, location, note, from } = req.body;
+    const proposal = await Proposal.findByIdAndUpdate(
+      req.params.id,
+      {
+        status: "countered",
+        counterProposal: { date, time, location, note, from, createdAt: new Date() }
+      },
+      { new: true }
+    );
+    if (!proposal) {
+      return res.status(404).json({ error: "Proposal not found" });
+    }
+    res.json({ success: true, proposal });
+  } catch (err) {
+    console.error("Error counter-proposing:", err);
+    res.status(500).json({ error: "Failed to counter-propose" });
+  }
+});
+
 // --- NOTES API ---
-// Get all notes (newest first)
 app.get('/api/notes', async (req, res) => {
   try {
     const notes = await Note.find().sort({ createdAt: -1 }).lean();
@@ -353,7 +386,6 @@ app.get('/api/notes', async (req, res) => {
   }
 });
 
-// Add a new note
 app.post('/api/notes', async (req, res) => {
   try {
     if (!req.body.text || !req.body.text.trim()) {
@@ -368,7 +400,6 @@ app.post('/api/notes', async (req, res) => {
   }
 });
 
-// Delete a note by ID
 app.delete('/api/notes/:id', async (req, res) => {
   try {
     await Note.findByIdAndDelete(req.params.id);

@@ -1,3 +1,4 @@
+// server.js (or index.js)
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
@@ -24,11 +25,15 @@ app.use(cors({
 
 app.use(express.json());
 
-// --- MONGODB SETUP ---
-mongoose.connect(process.env.MONGO_URI)
+// --- MONGODB SETUP (Optimized) ---
+mongoose.connect(process.env.MONGO_URI, {
+  maxPoolSize: 20, // Increase pool size for more concurrent users
+  serverSelectionTimeoutMS: 5000,
+})
   .then(() => console.log("MongoDB is connected!"))
   .catch(err => console.error("MongoDB connection error:", err));
 
+// --- MATCH SCHEMA & INDEXES ---
 const matchSchema = new mongoose.Schema({
   opponent: String,
   player: String,
@@ -40,9 +45,10 @@ const matchSchema = new mongoose.Schema({
   raceLength: String,
   createdAt: { type: Date, default: Date.now }
 });
+matchSchema.index({ player: 1, opponent: 1, date: 1 }); // For fast lookups
 const Match = mongoose.model('Match', matchSchema);
 
-// --- PROPOSAL SCHEMA & MODEL ---
+// --- PROPOSAL SCHEMA & INDEXES ---
 const proposalSchema = new mongoose.Schema({
   sender: String,         // sender email
   receiver: String,       // receiver email
@@ -56,6 +62,8 @@ const proposalSchema = new mongoose.Schema({
   status: { type: String, default: "pending" }, // "pending", "confirmed", "declined"
   createdAt: { type: Date, default: Date.now }
 });
+proposalSchema.index({ receiverName: 1, status: 1 });
+proposalSchema.index({ receiver: 1, status: 1 });
 const Proposal = mongoose.model('Proposal', proposalSchema);
 
 // --- NOTES SCHEMA & MODEL ---
@@ -65,7 +73,7 @@ const noteSchema = new mongoose.Schema({
 });
 const Note = mongoose.model('Note', noteSchema);
 
-// --- STREAM CHAT SETUP (existing code) ---
+// --- STREAM CHAT SETUP ---
 const apiKey = process.env.STREAM_API_KEY;
 const apiSecret = process.env.STREAM_API_SECRET;
 const serverClient = StreamChat.getInstance(apiKey, apiSecret);
@@ -84,7 +92,7 @@ function getMatchChannelId(userId1, userId2) {
   return `match-${[cleanId(userId1), cleanId(userId2)].sort().join('-')}`;
 }
 
-// --- STREAM CHAT ROUTES (existing code) ---
+// --- STREAM CHAT ROUTES ---
 app.post('/token', async (req, res) => {
   let { userId } = req.body;
   if (!userId) return res.status(400).json({ error: 'Missing userId' });
@@ -101,6 +109,7 @@ app.post('/token', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 app.post('/create-user', async (req, res) => {
   let { userId, name, email } = req.body;
   if (!userId) return res.status(400).json({ error: 'Missing userId' });
@@ -124,23 +133,40 @@ app.post('/create-user', async (req, res) => {
   }
 });
 
-// --- UPDATED /propose-match ROUTE ---
+// --- OPTIMIZED /propose-match ROUTE ---
 app.post('/propose-match', async (req, res) => {
   const { userId1, userId2, userName1, userName2, matchDate } = req.body;
   if (!userId1 || !userId2) return res.status(400).json({ error: 'Missing user IDs' });
   const cleanedUserId1 = cleanId(userId1);
   const cleanedUserId2 = cleanId(userId2);
   const channelId = getMatchChannelId(userId1, userId2);
+
   try {
-    await serverClient.upsertUser({ id: cleanedUserId1, name: userName1 || userId1 });
-    await serverClient.upsertUser({ id: cleanedUserId2, name: userName2 || userId2 });
-    for (const adminId of ADMIN_EMAILS) {
-      await serverClient.upsertUser({ id: adminId, name: "Admin", role: "admin" });
-    }
+    // Parallelize upserts and proposal save
+    await Promise.all([
+      serverClient.upsertUser({ id: cleanedUserId1, name: userName1 || userId1 }),
+      serverClient.upsertUser({ id: cleanedUserId2, name: userName2 || userId2 }),
+      ...ADMIN_EMAILS.map(adminId =>
+        serverClient.upsertUser({ id: adminId, name: "Admin", role: "admin" })
+      ),
+      new Proposal({
+        sender: userId1,
+        receiver: userId2,
+        senderName: userName1 || userId1,
+        receiverName: userName2 || userId2,
+        date: matchDate,
+        location: req.body.location || "",
+        message: req.body.message || "",
+        gameType: req.body.gameType || "8 Ball",
+        raceLength: req.body.raceLength || 7,
+        status: "pending"
+      }).save()
+    ]);
   } catch (err) {
-    console.error('Error upserting users:', err);
-    return res.status(500).json({ error: 'Failed to upsert users for chat channel' });
+    console.error('Error upserting users or saving proposal:', err);
+    return res.status(500).json({ error: 'Failed to upsert users or save proposal' });
   }
+
   const channelName = `${userName1 || userId1} & ${userName2 || userId2}`;
   const allMembers = Array.from(new Set([cleanedUserId1, cleanedUserId2, ...ADMIN_EMAILS]));
   const channelData = {
@@ -150,6 +176,7 @@ app.post('/propose-match', async (req, res) => {
     ...(matchDate && { matchDate }),
   };
   const channel = serverClient.channel('messaging', channelId, channelData);
+
   try {
     await channel.create();
   } catch (err) {
@@ -169,26 +196,6 @@ app.post('/propose-match', async (req, res) => {
     if (err.code !== 16) {
       return res.status(500).json({ error: 'Failed to add members to match chat channel', details: err.message });
     }
-  }
-
-  // --- NEW: Save proposal to MongoDB for dashboard tracking ---
-  try {
-    const proposal = new Proposal({
-      sender: userId1,
-      receiver: userId2,
-      senderName: userName1 || userId1,
-      receiverName: userName2 || userId2,
-      date: matchDate,
-      location: req.body.location || "",
-      message: req.body.message || "",
-      gameType: req.body.gameType || "8 Ball",
-      raceLength: req.body.raceLength || 7,
-      status: "pending"
-    });
-    await proposal.save();
-  } catch (err) {
-    console.error("Error saving proposal to MongoDB:", err);
-    // Don't fail the whole request if this part fails
   }
 
   res.json({ success: true, channelId });
@@ -224,14 +231,13 @@ app.post('/api/matches', async (req, res) => {
   }
 });
 
-// Get upcoming matches for a player
+// Get upcoming matches for a player (use .lean() for faster reads)
 app.get('/api/matches', async (req, res) => {
   const { player } = req.query;
   if (!player) return res.status(400).json({ error: 'Missing player' });
 
   try {
     const now = new Date();
-    // Find matches where user is either player or opponent
     const matches = await Match.find({
       $or: [
         { player },
@@ -243,7 +249,7 @@ app.get('/api/matches', async (req, res) => {
           now
         ]
       }
-    }).sort({ date: 1, time: 1 }).exec();
+    }).sort({ date: 1, time: 1 }).lean(); // Use lean for speed
 
     res.json(matches);
   } catch (err) {
@@ -292,7 +298,7 @@ app.get("/api/proposals", async (req, res) => {
   try {
     const { receiver } = req.query;
     if (!receiver) return res.status(400).json({ error: "Missing receiver" });
-    const proposals = await Proposal.find({ receiver, status: "pending" }).sort({ createdAt: -1 });
+    const proposals = await Proposal.find({ receiver, status: "pending" }).sort({ createdAt: -1 }).lean();
     res.json(proposals);
   } catch (err) {
     console.error(err);
@@ -305,7 +311,7 @@ app.get("/api/proposals/by-name", async (req, res) => {
   try {
     const { receiverName } = req.query;
     if (!receiverName) return res.status(400).json({ error: "Missing receiverName" });
-    const proposals = await Proposal.find({ receiverName, status: "pending" }).sort({ createdAt: -1 });
+    const proposals = await Proposal.find({ receiverName, status: "pending" }).sort({ createdAt: -1 }).lean();
     res.json(proposals);
   } catch (err) {
     console.error(err);
@@ -316,13 +322,13 @@ app.get("/api/proposals/by-name", async (req, res) => {
 // PATCH proposal status
 app.patch('/api/proposals/:id/status', async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, note } = req.body;
     if (!["pending", "confirmed", "declined"].includes(status)) {
       return res.status(400).json({ error: "Invalid status" });
     }
     const proposal = await Proposal.findByIdAndUpdate(
       req.params.id,
-      { status },
+      { status, ...(note ? { message: note } : {}) },
       { new: true }
     );
     if (!proposal) {
@@ -339,7 +345,7 @@ app.patch('/api/proposals/:id/status', async (req, res) => {
 // Get all notes (newest first)
 app.get('/api/notes', async (req, res) => {
   try {
-    const notes = await Note.find().sort({ createdAt: -1 });
+    const notes = await Note.find().sort({ createdAt: -1 }).lean();
     res.json(notes);
   } catch (err) {
     console.error('Error fetching notes:', err);

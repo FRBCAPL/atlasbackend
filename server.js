@@ -331,6 +331,22 @@ app.get("/api/proposals/by-name", async (req, res) => {
   }
 });
 
+// --- NEW: Fetch all pending/countered proposals SENT by a player (by sender name)
+app.get("/api/proposals/by-sender", async (req, res) => {
+  try {
+    const { senderName } = req.query;
+    if (!senderName) return res.status(400).json({ error: "Missing senderName" });
+    const proposals = await Proposal.find({
+      senderName,
+      status: { $in: ["pending", "countered"] }
+    }).sort({ createdAt: -1 }).lean();
+    res.json(proposals);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch sent proposals" });
+  }
+});
+
 // PATCH proposal status
 app.patch('/api/proposals/:id/status', async (req, res) => {
   try {

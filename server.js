@@ -242,10 +242,10 @@ app.get('/api/upcoming-matches', async (req, res) => {
   const { player } = req.query;
   if (!player) return res.status(400).json({ error: 'Missing player' });
 
-  // Case-insensitive, trimmed regex for name matching
   const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const playerRegex = new RegExp(`^${trimmedPlayer}$`, 'i');
   const now = new Date();
+  console.log("NOW:", now);
 
   try {
     const proposals = await Proposal.find({
@@ -256,19 +256,26 @@ app.get('/api/upcoming-matches', async (req, res) => {
       ]
     }).lean();
 
+    // Debug: print all proposals found
+    console.log("Found proposals:", proposals.map(p => ({date: p.date, time: p.time})));
+
     // Filter for only future matches
     const upcoming = proposals.filter(p => {
       if (!p.date || !p.time) return false;
 
-      // Parse date: "YYYY-MM-DD"
       let [year, month, day] = p.date.split("-");
-      if (!year || !month || !day) return false;
+      if (!year || !month || !day) {
+        console.log("Bad date format:", p.date);
+        return false;
+      }
       const isoDate = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 
-      // Parse time: "h:mm AM/PM"
       let timeStr = p.time.trim().toUpperCase();
       let [timePart, ampm] = timeStr.split(' ');
-      if (!timePart || !ampm) return false;
+      if (!timePart || !ampm) {
+        console.log("Bad time format:", p.time);
+        return false;
+      }
       let [hour, minute] = timePart.split(':').map(Number);
       if (ampm === "PM" && hour < 12) hour += 12;
       if (ampm === "AM" && hour === 12) hour = 0;
@@ -276,10 +283,12 @@ app.get('/api/upcoming-matches', async (req, res) => {
       const minuteStr = (minute || 0).toString().padStart(2, '0');
       const time24 = `${hourStr}:${minuteStr}`;
 
-      // Combine into ISO string and compare
       const matchDate = new Date(`${isoDate}T${time24}:00`);
+      console.log(`Checking match: ${p.date} ${p.time} => ${matchDate} (now: ${now})`);
       return matchDate > now;
     });
+
+    console.log("Upcoming matches:", upcoming.map(p => ({date: p.date, time: p.time})));
 
     // Sort by soonest
     upcoming.sort((a, b) => {

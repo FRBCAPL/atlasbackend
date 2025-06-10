@@ -238,42 +238,11 @@ app.post('/api/matches', async (req, res) => {
 });
 
 // --- CASE-INSENSITIVE, TRIMMED MATCHES API ---
-app.get('/api/matches', async (req, res) => {
-  const { player } = req.query;
-  if (!player) return res.status(400).json({ error: 'Missing player' });
-
-  // Trim and escape the player name for regex
-  const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const playerRegex = new RegExp(`^${trimmedPlayer}$`, 'i');
-
-  try {
-    const now = new Date();
-    const matches = await Match.find({
-      $or: [
-        { player: playerRegex },
-        { opponent: playerRegex }
-      ],
-      $expr: {
-        $gt: [
-          { $dateFromString: { dateString: { $concat: ["$date", "T", "$time"] } } },
-          now
-        ]
-      }
-    }).sort({ date: 1, time: 1 }).lean();
-
-    res.json(matches);
-  } catch (err) {
-    console.error('Error fetching matches:', err);
-    res.status(500).json({ error: 'Failed to fetch matches' });
-  }
-});
-
-// --- UPCOMING MATCHES FROM PROPOSALS (NEW ENDPOINT!) ---
 app.get('/api/upcoming-matches', async (req, res) => {
   const { player } = req.query;
   if (!player) return res.status(400).json({ error: 'Missing player' });
 
-  // Case-insensitive, trimmed regex
+  // Case-insensitive, trimmed regex for name matching
   const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const playerRegex = new RegExp(`^${trimmedPlayer}$`, 'i');
   const now = new Date();
@@ -287,34 +256,48 @@ app.get('/api/upcoming-matches', async (req, res) => {
       ]
     }).lean();
 
-    // Only future matches
+    // Filter for only future matches
     const upcoming = proposals.filter(p => {
       if (!p.date || !p.time) return false;
-      // Parse date/time
-      let [month, day, year] = p.date.split("-");
-      if (!year) [year, month, day] = p.date.split("-"); // fallback for YYYY-MM-DD
+
+      // Parse date: "YYYY-DD-MM" => "YYYY-MM-DD"
+      let [year, day, month] = p.date.split("-");
+      if (!year || !day || !month) return false;
       const isoDate = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-      let time = p.time;
-      if (time && /^\d{4}$/.test(time)) {
-        time = time.slice(0, 2) + ":" + time.slice(2);
-      }
-      const matchDate = new Date(`${isoDate}T${time}`);
+
+      // Parse time: "h:mm am/pm" => "HH:MM"
+      let [timePart, ampm] = p.time.trim().toLowerCase().split(' ');
+      if (!timePart || !ampm) return false;
+      let [hour, minute] = timePart.split(':').map(Number);
+      if (ampm === "pm" && hour < 12) hour += 12;
+      if (ampm === "am" && hour === 12) hour = 0;
+      const hourStr = hour.toString().padStart(2, '0');
+      const minuteStr = (minute || 0).toString().padStart(2, '0');
+      const time24 = `${hourStr}:${minuteStr}`;
+
+      // Combine into ISO string and compare
+      const matchDate = new Date(`${isoDate}T${time24}:00`);
       return matchDate > now;
     });
 
     // Sort by soonest
     upcoming.sort((a, b) => {
-      let getDate = p => {
-        let [month, day, year] = p.date.split("-");
-        if (!year) [year, month, day] = p.date.split("-");
+      // Date parsing logic repeated for sorting
+      function parseDateTime(p) {
+        let [year, day, month] = p.date.split("-");
+        if (!year || !day || !month) return new Date(0);
         const isoDate = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-        let time = p.time;
-        if (time && /^\d{4}$/.test(time)) {
-          time = time.slice(0, 2) + ":" + time.slice(2);
-        }
-        return new Date(`${isoDate}T${time}`);
-      };
-      return getDate(a) - getDate(b);
+        let [timePart, ampm] = p.time.trim().toLowerCase().split(' ');
+        if (!timePart || !ampm) return new Date(0);
+        let [hour, minute] = timePart.split(':').map(Number);
+        if (ampm === "pm" && hour < 12) hour += 12;
+        if (ampm === "am" && hour === 12) hour = 0;
+        const hourStr = hour.toString().padStart(2, '0');
+        const minuteStr = (minute || 0).toString().padStart(2, '0');
+        const time24 = `${hourStr}:${minuteStr}`;
+        return new Date(`${isoDate}T${time24}:00`);
+      }
+      return parseDateTime(a) - parseDateTime(b);
     });
 
     res.json(upcoming);
@@ -323,6 +306,7 @@ app.get('/api/upcoming-matches', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch upcoming matches' });
   }
 });
+
 
 // --- PROPOSALS API ---
 // Create a match proposal

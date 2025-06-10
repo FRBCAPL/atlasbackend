@@ -260,17 +260,18 @@ app.get('/api/upcoming-matches', async (req, res) => {
     const upcoming = proposals.filter(p => {
       if (!p.date || !p.time) return false;
 
-      // Parse date: "YYYY-DD-MM" => "YYYY-MM-DD"
-      let [year, day, month] = p.date.split("-");
-      if (!year || !day || !month) return false;
+      // Parse date: "YYYY-MM-DD"
+      let [year, month, day] = p.date.split("-");
+      if (!year || !month || !day) return false;
       const isoDate = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 
-      // Parse time: "h:mm am/pm" => "HH:MM"
-      let [timePart, ampm] = p.time.trim().toLowerCase().split(' ');
+      // Parse time: "h:mm AM/PM"
+      let timeStr = p.time.trim().toUpperCase();
+      let [timePart, ampm] = timeStr.split(' ');
       if (!timePart || !ampm) return false;
       let [hour, minute] = timePart.split(':').map(Number);
-      if (ampm === "pm" && hour < 12) hour += 12;
-      if (ampm === "am" && hour === 12) hour = 0;
+      if (ampm === "PM" && hour < 12) hour += 12;
+      if (ampm === "AM" && hour === 12) hour = 0;
       const hourStr = hour.toString().padStart(2, '0');
       const minuteStr = (minute || 0).toString().padStart(2, '0');
       const time24 = `${hourStr}:${minuteStr}`;
@@ -282,16 +283,16 @@ app.get('/api/upcoming-matches', async (req, res) => {
 
     // Sort by soonest
     upcoming.sort((a, b) => {
-      // Date parsing logic repeated for sorting
       function parseDateTime(p) {
-        let [year, day, month] = p.date.split("-");
-        if (!year || !day || !month) return new Date(0);
+        let [year, month, day] = p.date.split("-");
+        if (!year || !month || !day) return new Date(0);
         const isoDate = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-        let [timePart, ampm] = p.time.trim().toLowerCase().split(' ');
+        let timeStr = p.time.trim().toUpperCase();
+        let [timePart, ampm] = timeStr.split(' ');
         if (!timePart || !ampm) return new Date(0);
         let [hour, minute] = timePart.split(':').map(Number);
-        if (ampm === "pm" && hour < 12) hour += 12;
-        if (ampm === "am" && hour === 12) hour = 0;
+        if (ampm === "PM" && hour < 12) hour += 12;
+        if (ampm === "AM" && hour === 12) hour = 0;
         const hourStr = hour.toString().padStart(2, '0');
         const minuteStr = (minute || 0).toString().padStart(2, '0');
         const time24 = `${hourStr}:${minuteStr}`;
@@ -306,6 +307,7 @@ app.get('/api/upcoming-matches', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch upcoming matches' });
   }
 });
+
 
 
 // --- PROPOSALS API ---

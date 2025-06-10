@@ -237,16 +237,21 @@ app.post('/api/matches', async (req, res) => {
   }
 });
 
+// --- CASE-INSENSITIVE, TRIMMED MATCHES API ---
 app.get('/api/matches', async (req, res) => {
   const { player } = req.query;
   if (!player) return res.status(400).json({ error: 'Missing player' });
+
+  // Trim and escape the player name for regex
+  const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const playerRegex = new RegExp(`^${trimmedPlayer}$`, 'i');
 
   try {
     const now = new Date();
     const matches = await Match.find({
       $or: [
-        { player },
-        { opponent: player }
+        { player: playerRegex },
+        { opponent: playerRegex }
       ],
       $expr: {
         $gt: [
@@ -260,6 +265,62 @@ app.get('/api/matches', async (req, res) => {
   } catch (err) {
     console.error('Error fetching matches:', err);
     res.status(500).json({ error: 'Failed to fetch matches' });
+  }
+});
+
+// --- UPCOMING MATCHES FROM PROPOSALS (NEW ENDPOINT!) ---
+app.get('/api/upcoming-matches', async (req, res) => {
+  const { player } = req.query;
+  if (!player) return res.status(400).json({ error: 'Missing player' });
+
+  // Case-insensitive, trimmed regex
+  const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const playerRegex = new RegExp(`^${trimmedPlayer}$`, 'i');
+  const now = new Date();
+
+  try {
+    const proposals = await Proposal.find({
+      status: "confirmed",
+      $or: [
+        { senderName: playerRegex },
+        { receiverName: playerRegex }
+      ]
+    }).lean();
+
+    // Only future matches
+    const upcoming = proposals.filter(p => {
+      if (!p.date || !p.time) return false;
+      // Parse date/time
+      let [month, day, year] = p.date.split("-");
+      if (!year) [year, month, day] = p.date.split("-"); // fallback for YYYY-MM-DD
+      const isoDate = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+      let time = p.time;
+      if (time && /^\d{4}$/.test(time)) {
+        time = time.slice(0, 2) + ":" + time.slice(2);
+      }
+      const matchDate = new Date(`${isoDate}T${time}`);
+      return matchDate > now;
+    });
+
+    // Sort by soonest
+    upcoming.sort((a, b) => {
+      let getDate = p => {
+        let [month, day, year] = p.date.split("-");
+        if (!year) [year, month, day] = p.date.split("-");
+        const isoDate = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+        let time = p.time;
+        if (time && /^\d{4}$/.test(time)) {
+          time = time.slice(0, 2) + ":" + time.slice(2);
+        }
+        return new Date(`${isoDate}T${time}`);
+      };
+      return getDate(a) - getDate(b);
+    });
+
+    res.json(upcoming);
+  } catch (err) {
+    console.error('Error fetching upcoming matches:', err);
+    res.status(500).json({ error: 'Failed to fetch upcoming matches' });
   }
 });
 
@@ -347,7 +408,7 @@ app.get("/api/proposals/by-sender", async (req, res) => {
   }
 });
 
-// PATCH proposal status
+// PATCH proposal status (CONFIRM CREATES MATCH)
 app.patch('/api/proposals/:id/status', async (req, res) => {
   try {
     const { status, note } = req.body;
@@ -362,6 +423,29 @@ app.patch('/api/proposals/:id/status', async (req, res) => {
     if (!proposal) {
       return res.status(404).json({ error: "Proposal not found" });
     }
+
+    // CREATE MATCH WHEN CONFIRMED (optional, doesn't affect new endpoint)
+    if (status === "confirmed") {
+      const existing = await Match.findOne({
+        player: proposal.senderName,
+        opponent: proposal.receiverName,
+        date: proposal.date,
+        time: proposal.time,
+        location: proposal.location
+      });
+      if (!existing) {
+        await Match.create({
+          player: proposal.senderName,
+          opponent: proposal.receiverName,
+          date: proposal.date,
+          time: proposal.time,
+          location: proposal.location,
+          gameType: proposal.gameType,
+          raceLength: proposal.raceLength,
+        });
+      }
+    }
+
     res.json({ success: true, proposal });
   } catch (err) {
     console.error("Error updating proposal status:", err);
@@ -369,7 +453,7 @@ app.patch('/api/proposals/:id/status', async (req, res) => {
   }
 });
 
-// PATCH counter-propose
+// PATCH counter-propose (NO MATCH CREATED HERE)
 app.patch('/api/proposals/:id/counter', async (req, res) => {
   try {
     const { date, time, location, note, from } = req.body;

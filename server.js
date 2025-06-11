@@ -11,6 +11,8 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000'
 ];
+const cron = require('node-cron');
+const { deleteExpiredMatchChannels } = require('./cleanupChannels');
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -508,4 +510,10 @@ app.delete('/api/notes/:id', async (req, res) => {
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Stream token server running on port ${PORT}`);
+});
+// This will run the cleanup every day at 2:00 AM
+cron.schedule('0 2 * * *', () => {
+  deleteExpiredMatchChannels()
+    .then(() => console.log('Expired channels cleaned up!'))
+    .catch(err => console.error('Cleanup failed:', err));
 });

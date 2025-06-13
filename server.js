@@ -12,7 +12,7 @@ const allowedOrigins = [
   'http://localhost:3000'
 ];
 const cron = require('node-cron');
-const { deleteExpiredMatchChannels } = require('./cleanupChannels');
+const { deleteExpiredMatchChannels } = require('./src/cleanupChannels');
 
 app.use(cors({
   origin: function (origin, callback) {

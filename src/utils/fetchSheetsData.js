@@ -1,16 +1,18 @@
-// my-app/src/utils/fetchSheetData.js
-async function fetchSheetData(sheetID, sheetName) {
-  try {
-    const response = await fetch(`/api/sheet-data?sheetID=${sheetID}&sheetName=${sheetName}`); // Call your backend endpoint
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    const data = await response.json();
-    return data; // Or data.rows, depending on what your backend sends
-  } catch (error) {
-    console.error("Could not fetch sheet data:", error);
-    throw error; // Re-throw to allow the calling component to handle
-  }
-}
+import axios from "axios";
 
-export default fetchSheetData;
+const API_KEY = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY;
+
+/**
+ * Fetches data from a Google Sheet using the Google Sheets API.
+ * @param {string} sheetID - The spreadsheet ID.
+ * @param {string} range - The range to fetch, e.g. "Sheet1!A1:D10"
+ * @returns {Promise<Array>} - Array of rows (arrays of cell values)
+ */
+export default async function fetchSheetData(sheetID, range) {
+  if (!API_KEY) throw new Error("Google Sheets API key is missing.");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetID}/values/${encodeURIComponent(
+    range
+  )}?key=${API_KEY}`;
+  const response = await axios.get(url);
+  return response.data.values; // Array of rows
+}

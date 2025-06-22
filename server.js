@@ -17,7 +17,9 @@ const path = require('path');
 const allowedOrigins = [
   'https://frbcapl.github.io',
   'http://localhost:5173',
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'https://www.frusapl.com', // <-- add your domain here
+  'https://frusapl.com'      // <-- add non-www version too, if needed
 ];
 
 app.use(cors({

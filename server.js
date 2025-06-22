@@ -3,16 +3,22 @@ const cors = require('cors');
 require('dotenv').config();
 const mongoose = require('mongoose');
 const { StreamChat } = require('stream-chat');
-
+const cron = require('node-cron');
+const { exec } = require('child_process');
+const { deleteExpiredMatchChannels } = require('./src/cleanupChannels');
+const { createMatchEvent } = require('./src/googleCalendar');
+const User = require('./models/User');
+const syncSheetUsersToMongo = require('./syncUsersFromSheet');
+const Division = require('./models/Division');
 const app = express();
+const path = require('path');
+
 
 const allowedOrigins = [
   'https://frbcapl.github.io',
   'http://localhost:5173',
   'http://localhost:3000'
 ];
-const cron = require('node-cron');
-const { deleteExpiredMatchChannels } = require('./src/cleanupChannels');
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -24,9 +30,9 @@ app.use(cors({
   }
 }));
 
+app.use('/static', express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// --- MONGODB SETUP (Optimized) ---
 mongoose.connect(process.env.MONGO_URI, {
   maxPoolSize: 20,
   serverSelectionTimeoutMS: 5000,
@@ -34,22 +40,24 @@ mongoose.connect(process.env.MONGO_URI, {
   .then(() => console.log("MongoDB is connected!"))
   .catch(err => console.error("MongoDB connection error:", err));
 
-// --- MATCH SCHEMA & INDEXES ---
+// --- MATCH SCHEMA & MODEL ---
 const matchSchema = new mongoose.Schema({
   opponent: String,
   player: String,
   day: String,
-  date: String,      // "YYYY-MM-DD"
-  time: String,      // "HH:MM"
+  date: String,
+  time: String,
   location: String,
   gameType: String,
   raceLength: String,
-  createdAt: { type: Date, default: Date.now }
+  division: String, // <-- Added division field
+  createdAt: { type: Date, default: Date.now },
+  completed: { type: Boolean, default: false }
 });
 matchSchema.index({ player: 1, opponent: 1, date: 1 });
 const Match = mongoose.model('Match', matchSchema);
 
-// --- PROPOSAL SCHEMA & INDEXES (with counterProposal) ---
+// --- PROPOSAL SCHEMA & MODEL ---
 const proposalSchema = new mongoose.Schema({
   sender: String,
   receiver: String,
@@ -61,7 +69,7 @@ const proposalSchema = new mongoose.Schema({
   message: String,
   gameType: String,
   raceLength: Number,
-  status: { type: String, default: "pending" }, // "pending", "confirmed", "declined", "countered"
+  status: { type: String, default: "pending" },
   createdAt: { type: Date, default: Date.now },
   counterProposal: {
     date: String,
@@ -70,7 +78,10 @@ const proposalSchema = new mongoose.Schema({
     note: String,
     from: String,
     createdAt: { type: Date, default: Date.now }
-  }
+  },
+  phase: { type: String, enum: ["scheduled", "ladder"], required: true },
+  completed: { type: Boolean, default: false },
+  division: String // <-- Added division field
 });
 proposalSchema.index({ receiverName: 1, status: 1 });
 proposalSchema.index({ receiver: 1, status: 1 });
@@ -120,8 +131,9 @@ app.post('/token', async (req, res) => {
   }
 });
 
+// --- CREATE/UPDATE USER WITH DIVISION ---
 app.post('/create-user', async (req, res) => {
-  let { userId, name, email } = req.body;
+  let { userId, name, email, division } = req.body;
   if (!userId) return res.status(400).json({ error: 'Missing userId' });
   userId = cleanId(userId);
   try {
@@ -129,6 +141,16 @@ app.post('/create-user', async (req, res) => {
     if (email) user.email = email;
     if (isAdminUser(userId)) user.role = "admin";
     await serverClient.upsertUser(user);
+
+    // Save user info including division to MongoDB
+    console.log(`API: Add user ${req.params.id} to division ${division}`);
+    await User.findOneAndUpdate(
+      { id: userId },
+      { $set: { name: name || userId, email, division } },
+      { upsert: true, new: true }
+    );
+
+    // Add user to general chat channel
     const generalChannel = serverClient.channel('messaging', 'general');
     try {
       await generalChannel.addMembers([userId]);
@@ -136,6 +158,7 @@ app.post('/create-user', async (req, res) => {
     } catch (err) {
       console.error('Error adding user to general channel:', err.message);
     }
+
     res.json({ success: true });
   } catch (err) {
     console.error('Error creating/updating user:', err);
@@ -143,9 +166,88 @@ app.post('/create-user', async (req, res) => {
   }
 });
 
-// --- OPTIMIZED /propose-match ROUTE ---
+// --- GET USER INFO (including division) ---
+app.get('/api/user/:idOrEmail', async (req, res) => {
+  try {
+    const idOrEmail = decodeURIComponent(req.params.idOrEmail);
+    // Try to find by id or email
+    const user = await User.findOne({ $or: [ { id: idOrEmail }, { email: idOrEmail } ] });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
+  } catch (err) {
+    console.error('Error fetching user:', err);
+    res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
+
+// --- UPDATE USER DIVISION ---
+app.patch('/api/user/:id/division', async (req, res) => {
+  const { division } = req.body;
+  if (!division) return res.status(400).json({ error: 'Division is required' });
+
+  try {
+    const user = await User.findOneAndUpdate(
+      { id: req.params.id },
+      { $set: { division } },
+      { new: true }
+    );
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ success: true, user });
+  } catch (err) {
+    console.error('Error updating division:', err);
+    res.status(500).json({ error: 'Failed to update division' });
+  }
+});
+
+// --- DIVISION MANAGEMENT ENDPOINTS ---
+app.post('/admin/divisions', async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    if (!name) return res.status(400).json({ error: "Division name required" });
+    const division = await Division.create({ name, description });
+    res.status(201).json({ success: true, division });
+  } catch (err) {
+    if (err.code === 11000) {
+      res.status(400).json({ error: "Division already exists" });
+    } else {
+      res.status(500).json({ error: err.message });
+    }
+  }
+});
+app.post('/admin/update-standings', (req, res) => {
+  exec('python scrape_standings.py', (error, stdout, stderr) => {
+    if (error) {
+      console.error('Error running scrape_standings.py:', error);
+      return res.status(500).json({ error: stderr || error.message });
+    }
+    res.json({ message: stdout || "Standings updated." });
+  });
+});
+app.get('/admin/divisions', async (req, res) => {
+  try {
+    const divisions = await Division.find().lean();
+    res.json(divisions);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- SCHEDULE SCRAPE ENDPOINT ---
+app.post('/admin/update-schedule', (req, res) => {
+  exec('python scrape_schedule.py', (error, stdout, stderr) => {
+    if (error) {
+      console.error(`Error running scrape_schedule.py:`, error);
+      return res.status(500).json({ error: stderr || error.message });
+    }
+    res.json({ message: stdout || "Schedule updated." });
+  });
+});
+
+// --- MATCH/PROPOSAL/NOTES ENDPOINTS ---
+
 app.post('/propose-match', async (req, res) => {
-  const { userId1, userId2, userName1, userName2, matchDate } = req.body;
+  const { userId1, userId2, userName1, userName2, matchDate, division } = req.body;
   if (!userId1 || !userId2) return res.status(400).json({ error: 'Missing user IDs' });
   const cleanedUserId1 = cleanId(userId1);
   const cleanedUserId2 = cleanId(userId2);
@@ -168,7 +270,10 @@ app.post('/propose-match', async (req, res) => {
         message: req.body.message || "",
         gameType: req.body.gameType || "8 Ball",
         raceLength: req.body.raceLength || 7,
-        status: "pending"
+        status: "pending",
+        phase: req.body.phase || "scheduled",
+        completed: false,
+        division: division || "" // <-- Add division here!
       }).save()
     ]);
   } catch (err) {
@@ -227,7 +332,6 @@ app.post('/make-admin', async (req, res) => {
 });
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
-// --- MATCH STORAGE API ---
 app.post('/api/matches', async (req, res) => {
   try {
     const match = new Match(req.body);
@@ -239,99 +343,67 @@ app.post('/api/matches', async (req, res) => {
   }
 });
 
-// --- CASE-INSENSITIVE, TRIMMED MATCHES API ---
-app.get('/api/upcoming-matches', async (req, res) => {
-  const { player } = req.query;
+app.patch('/api/proposals/:id/completed', async (req, res) => {
+  try {
+    const proposal = await Proposal.findByIdAndUpdate(
+      req.params.id,
+      { completed: true },
+      { new: true }
+    );
+    if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+    res.json({ success: true, proposal });
+  } catch (err) {
+    console.error('Error marking proposal as completed:', err);
+    res.status(500).json({ error: 'Failed to update proposal' });
+  }
+});
+
+// --- FILTERED MATCHES ENDPOINT ---
+app.get('/api/all-matches', async (req, res) => {
+  const { player, division } = req.query;
   if (!player) return res.status(400).json({ error: 'Missing player' });
 
   const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const playerRegex = new RegExp(`^${trimmedPlayer}$`, 'i');
-  const now = new Date();
-  console.log("NOW:", now);
+
+  const filter = {
+    status: "confirmed",
+    completed: { $ne: true },
+    $or: [
+      { senderName: playerRegex },
+      { receiverName: playerRegex }
+    ]
+  };
+  if (division) {
+    filter.division = { $in: [division] };
+  }
 
   try {
-    const proposals = await Proposal.find({
-      status: "confirmed",
-      $or: [
-        { senderName: playerRegex },
-        { receiverName: playerRegex }
-      ]
-    }).lean();
-
-    // Debug: print all proposals found
-    console.log("Found proposals:", proposals.map(p => ({date: p.date, time: p.time})));
-
-    // Filter for only future matches
-    const upcoming = proposals.filter(p => {
-      if (!p.date || !p.time) return false;
-
-      let [year, month, day] = p.date.split("-");
-      if (!year || !month || !day) {
-        console.log("Bad date format:", p.date);
-        return false;
-      }
-      const isoDate = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-
-      let timeStr = p.time.trim().toUpperCase();
-      let [timePart, ampm] = timeStr.split(' ');
-      if (!timePart || !ampm) {
-        console.log("Bad time format:", p.time);
-        return false;
-      }
-      let [hour, minute] = timePart.split(':').map(Number);
-      if (ampm === "PM" && hour < 12) hour += 12;
-      if (ampm === "AM" && hour === 12) hour = 0;
-      const hourStr = hour.toString().padStart(2, '0');
-      const minuteStr = (minute || 0).toString().padStart(2, '0');
-      const time24 = `${hourStr}:${minuteStr}`;
-
-      const matchDate = new Date(`${isoDate}T${time24}:00`);
-      console.log(`Checking match: ${p.date} ${p.time} => ${matchDate} (now: ${now})`);
-      return matchDate > now;
-    });
-
-    console.log("Upcoming matches:", upcoming.map(p => ({date: p.date, time: p.time})));
-
-    // Sort by soonest
-    upcoming.sort((a, b) => {
-      function parseDateTime(p) {
-        let [year, month, day] = p.date.split("-");
-        if (!year || !month || !day) return new Date(0);
-        const isoDate = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-        let timeStr = p.time.trim().toUpperCase();
-        let [timePart, ampm] = timeStr.split(' ');
-        if (!timePart || !ampm) return new Date(0);
-        let [hour, minute] = timePart.split(':').map(Number);
-        if (ampm === "PM" && hour < 12) hour += 12;
-        if (ampm === "AM" && hour === 12) hour = 0;
-        const hourStr = hour.toString().padStart(2, '0');
-        const minuteStr = (minute || 0).toString().padStart(2, '0');
-        const time24 = `${hourStr}:${minuteStr}`;
-        return new Date(`${isoDate}T${time24}:00`);
-      }
-      return parseDateTime(a) - parseDateTime(b);
-    });
-
-    res.json(upcoming);
+    const proposals = await Proposal.find(filter).lean();
+    console.log("FILTER:", filter);
+    console.log("FOUND MATCHES:", proposals.length, proposals.map(p => ({
+      senderName: p.senderName,
+      receiverName: p.receiverName,
+      status: p.status,
+      completed: p.completed,
+      division: p.division
+    })));
+    res.json(proposals);
   } catch (err) {
-    console.error('Error fetching upcoming matches:', err);
-    res.status(500).json({ error: 'Failed to fetch upcoming matches' });
+    res.status(500).json({ error: 'Failed to fetch matches' });
   }
 });
 
 
-
 // --- PROPOSALS API ---
-// Create a match proposal
 app.post('/api/proposals', async (req, res) => {
-  console.log("Received /api/proposals POST:", req.body);
   try {
     const {
       sender, receiver, senderName, receiverName,
-      date, time, location, message, gameType, raceLength
+      date, time, location, message, gameType, raceLength, phase, division
     } = req.body;
 
-    if (!sender || !receiver || !senderName || !receiverName || !date || !location) {
+    if (!sender || !receiver || !senderName || !receiverName || !date || !location || !phase) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
@@ -346,7 +418,10 @@ app.post('/api/proposals', async (req, res) => {
       message: message || "",
       gameType: gameType || "8 Ball",
       raceLength: raceLength || 7,
-      status: "pending"
+      status: "pending",
+      phase,
+      completed: false,
+      division: division || ""
     });
 
     await proposal.save();
@@ -357,31 +432,22 @@ app.post('/api/proposals', async (req, res) => {
   }
 });
 
-// Fetch all pending/countered proposals for a player (by receiver email)
-app.get("/api/proposals", async (req, res) => {
-  try {
-    const { receiver } = req.query;
-    if (!receiver) return res.status(400).json({ error: "Missing receiver" });
-    const proposals = await Proposal.find({
-      receiver,
-      status: { $in: ["pending", "countered"] }
-    }).sort({ createdAt: -1 }).lean();
-    res.json(proposals);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch proposals" });
-  }
-});
-
-// Fetch all pending/countered proposals for a player (by receiver name)
+// --- FILTERED PROPOSALS BY RECEIVER ---
 app.get("/api/proposals/by-name", async (req, res) => {
   try {
-    const { receiverName } = req.query;
+    const { receiverName, division } = req.query;
     if (!receiverName) return res.status(400).json({ error: "Missing receiverName" });
-    const proposals = await Proposal.find({
+
+    const filter = {
       receiverName,
       status: { $in: ["pending", "countered"] }
-    }).sort({ createdAt: -1 }).lean();
+    };
+   if (division) {
+  filter.division = { $in: [division] };
+}
+
+
+    const proposals = await Proposal.find(filter).sort({ createdAt: -1 }).lean();
     res.json(proposals);
   } catch (err) {
     console.error(err);
@@ -389,15 +455,22 @@ app.get("/api/proposals/by-name", async (req, res) => {
   }
 });
 
-// --- NEW: Fetch all pending/countered proposals SENT by a player (by sender name)
+// --- FILTERED PROPOSALS BY SENDER ---
 app.get("/api/proposals/by-sender", async (req, res) => {
   try {
-    const { senderName } = req.query;
+    const { senderName, division } = req.query;
     if (!senderName) return res.status(400).json({ error: "Missing senderName" });
-    const proposals = await Proposal.find({
+
+    const filter = {
       senderName,
       status: { $in: ["pending", "countered"] }
-    }).sort({ createdAt: -1 }).lean();
+    };
+   if (division) {
+  filter.division = { $in: [division] };
+}
+
+
+    const proposals = await Proposal.find(filter).sort({ createdAt: -1 }).lean();
     res.json(proposals);
   } catch (err) {
     console.error(err);
@@ -405,7 +478,6 @@ app.get("/api/proposals/by-sender", async (req, res) => {
   }
 });
 
-// PATCH proposal status (CONFIRM CREATES MATCH)
 app.patch('/api/proposals/:id/status', async (req, res) => {
   try {
     const { status, note } = req.body;
@@ -421,14 +493,15 @@ app.patch('/api/proposals/:id/status', async (req, res) => {
       return res.status(404).json({ error: "Proposal not found" });
     }
 
-    // CREATE MATCH WHEN CONFIRMED (optional, doesn't affect new endpoint)
+    // CREATE MATCH WHEN CONFIRMED
     if (status === "confirmed") {
       const existing = await Match.findOne({
         player: proposal.senderName,
         opponent: proposal.receiverName,
         date: proposal.date,
         time: proposal.time,
-        location: proposal.location
+        location: proposal.location,
+        division: proposal.division // <-- Match is created with division
       });
       if (!existing) {
         await Match.create({
@@ -439,7 +512,32 @@ app.patch('/api/proposals/:id/status', async (req, res) => {
           location: proposal.location,
           gameType: proposal.gameType,
           raceLength: proposal.raceLength,
+          division: proposal.division || ""
         });
+
+        // --- GOOGLE CALENDAR EVENT CREATION ---
+        try {
+          function convertTo24(timeStr) {
+            let [time, ampm] = timeStr.trim().toUpperCase().split(' ');
+            let [hour, min] = time.split(':').map(Number);
+            if (ampm === 'PM' && hour < 12) hour += 12;
+            if (ampm === 'AM' && hour === 12) hour = 0;
+            return `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+          }
+          const startDateTime = new Date(`${proposal.date}T${convertTo24(proposal.time)}:00-06:00`);
+          const endDateTime = new Date(startDateTime.getTime() + 2 * 60 * 60 * 1000); // 2 hours later
+
+          await createMatchEvent({
+            summary: `${proposal.senderName} vs ${proposal.receiverName}`,
+            description: `Game Type: ${proposal.gameType}, Race Length: ${proposal.raceLength}`,
+            location: proposal.location,
+            startDateTime: startDateTime.toISOString(),
+            endDateTime: endDateTime.toISOString()
+          });
+          console.log("Google Calendar event created!");
+        } catch (err) {
+          console.error("Failed to create Google Calendar event:", err);
+        }
       }
     }
 
@@ -450,7 +548,6 @@ app.patch('/api/proposals/:id/status', async (req, res) => {
   }
 });
 
-// PATCH counter-propose (NO MATCH CREATED HERE)
 app.patch('/api/proposals/:id/counter', async (req, res) => {
   try {
     const { date, time, location, note, from } = req.body;
@@ -482,6 +579,15 @@ app.get('/api/notes', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch notes' });
   }
 });
+app.post('/admin/sync-users', async (req, res) => {
+  try {
+    await syncSheetUsersToMongo();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Sync failed:', err);
+    res.status(500).json({ error: 'Sync failed' });
+  }
+});
 
 app.post('/api/notes', async (req, res) => {
   try {
@@ -507,11 +613,81 @@ app.delete('/api/notes/:id', async (req, res) => {
   }
 });
 
+// --- BULK CONVERT division TO divisions ARRAY FOR ALL USERS ---
+app.post('/admin/convert-divisions', async (req, res) => {
+  try {
+    const result = await User.collection.updateMany(
+      { division: { $exists: true } },
+      [
+        { $set: { divisions: ["$division"] } },
+        { $unset: "division" }
+      ]
+    );
+    res.json({ success: true, matched: result.matchedCount, modified: result.modifiedCount });
+  } catch (error) {
+    console.error('Error converting divisions:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Add a division to a user's divisions array (no duplicates)
+app.patch('/admin/user/:id/add-division', async (req, res) => {
+  const { division } = req.body;
+  const trimmedId = req.params.id.trim();
+  const user = await User.findOneAndUpdate(
+    { id: trimmedId },
+    { $addToSet: { divisions: division } },
+    { new: true }
+  );
+  if (!user) return res.status(404).json({ error: "User not found" });
+  res.json({ success: true, user });
+});
+app.patch('/admin/user/:id/remove-division', async (req, res) => {
+  const { division } = req.body;
+  const trimmedId = req.params.id.trim();
+  const user = await User.findOneAndUpdate(
+    { id: trimmedId },
+    { $pull: { divisions: division } },
+    { new: true }
+  );
+  if (!user) return res.status(404).json({ error: "User not found" });
+  res.json({ success: true, user });
+});
+
+// Search users by name or email (partial match, case-insensitive)
+app.get('/admin/search-users', async (req, res) => {
+  const { query } = req.query;
+  if (!query || !query.trim()) {
+    return res.status(400).json({ error: 'Missing search query' });
+  }
+  const regex = new RegExp(query.trim(), 'i');
+  try {
+    const users = await User.find({
+      $or: [
+        { name: regex },
+        { email: regex }
+      ]
+    }).lean();
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to search users' });
+  }
+});
+
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = await User.find().lean();
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Stream token server running on port ${PORT}`);
 });
-// This will run the cleanup every day at 2:00 AM
+
 cron.schedule('0 2 * * *', () => {
   deleteExpiredMatchChannels()
     .then(() => console.log('Expired channels cleaned up!'))

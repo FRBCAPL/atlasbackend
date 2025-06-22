@@ -46,3 +46,5 @@ node_modules
 .Trash-*
 
 # Coverage directory used by tools like
+src/service-account.json
+src/service-account3.json

@@ -571,6 +571,19 @@ app.patch('/api/proposals/:id/counter', async (req, res) => {
     res.status(500).json({ error: "Failed to counter-propose" });
   }
 });
+app.post("/admin/update-schedule", (req, res) => {
+  const division = req.body.division;
+  let cmd = "python scrape_schedule.py";
+  if (division) {
+    cmd += ` "${division}"`;
+  }
+  exec(cmd, (error, stdout, stderr) => {
+    if (error) {
+      return res.status(500).send(stderr || error.message);
+    }
+    res.send(stdout);
+  });
+});
 
 // --- NOTES API ---
 app.get('/api/notes', async (req, res) => {

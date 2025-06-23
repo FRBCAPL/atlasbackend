@@ -1,20 +1,14 @@
-FROM python:3.11-slim
+FROM selenium/standalone-chrome:latest
 
-# Install Chrome and Chromedriver
-RUN apt-get update && apt-get install -y \
-    chromium-driver \
-    chromium \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set Chrome environment variables
-ENV CHROME_BIN=/usr/bin/chromium
-ENV CHROMEDRIVER_BIN=/usr/bin/chromedriver
-
+USER root
 WORKDIR /app
 
+# Install Python and pip
+RUN apt-get update && apt-get install -y python3 python3-pip
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "scrape_schedule.py"]
+CMD ["python3", "scrape_schedule.py"]

@@ -405,9 +405,10 @@ app.post('/api/proposals', async (req, res) => {
       date, time, location, message, gameType, raceLength, phase, division
     } = req.body;
 
-    if (!sender || !receiver || !senderName || !receiverName || !date || !location || !phase) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
+    if (!sender || !receiver || !senderName || !receiverName || !date || !location || !phase || !division) {
+  return res.status(400).json({ error: "Missing required fields" });
+}
+
 
     const proposal = new Proposal({
       sender,

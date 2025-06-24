@@ -50,6 +50,7 @@ exports.getAllMatches = async (req, res) => {
 
     // 3. Remove scheduled matches that already have a confirmed or completed proposal
     //    (for this player/opponent pair, any direction)
+    // Build a set of all player pairs (normalized, both directions) that have a confirmed or completed proposal
     const allProposals = await Proposal.find({
       division,
       $or: [
@@ -57,30 +58,23 @@ exports.getAllMatches = async (req, res) => {
         { receiverName: playerRegex }
       ]
     }).lean();
-    const completedPairs = new Set();
+    const confirmedPairs = new Set();
     allProposals.forEach(p => {
-      if (p.status === 'confirmed' && p.counterProposal && p.counterProposal.completed === true) {
-        // completed
-        const key1 = `${p.senderName?.trim().toLowerCase()}|${p.receiverName?.trim().toLowerCase()}`;
-        const key2 = `${p.receiverName?.trim().toLowerCase()}|${p.senderName?.trim().toLowerCase()}`;
-        completedPairs.add(key1);
-        completedPairs.add(key2);
-      }
-      if (p.status === 'confirmed' && p.counterProposal && p.counterProposal.completed !== true) {
-        // confirmed but not completed
-        const key1 = `${p.senderName?.trim().toLowerCase()}|${p.receiverName?.trim().toLowerCase()}`;
-        const key2 = `${p.receiverName?.trim().toLowerCase()}|${p.senderName?.trim().toLowerCase()}`;
-        completedPairs.add(key1);
-        completedPairs.add(key2);
+      if (p.status === 'confirmed' && p.counterProposal) {
+        const sName = (p.senderName || '').trim().toLowerCase();
+        const rName = (p.receiverName || '').trim().toLowerCase();
+        // Add both directions for the pair
+        confirmedPairs.add(`${sName}|${rName}`);
+        confirmedPairs.add(`${rName}|${sName}`);
       }
     });
-    // Only keep scheduled matches that do NOT have a proposal (confirmed or completed)
+    // Only keep scheduled matches that do NOT have a proposal (confirmed or completed) for this pair
     const filteredScheduled = scheduledMatches.filter(m => {
-      const p1 = m.player1?.trim().toLowerCase();
-      const p2 = m.player2?.trim().toLowerCase();
+      const p1 = (m.player1 || '').trim().toLowerCase();
+      const p2 = (m.player2 || '').trim().toLowerCase();
       const key1 = `${p1}|${p2}`;
       const key2 = `${p2}|${p1}`;
-      return !completedPairs.has(key1) && !completedPairs.has(key2);
+      return !confirmedPairs.has(key1) && !confirmedPairs.has(key2);
     });
 
     // 4. Merge: proposals (confirmed, not completed) + filtered scheduled matches

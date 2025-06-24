@@ -80,7 +80,7 @@ const proposalSchema = new mongoose.Schema({
     from: String,
     createdAt: { type: Date, default: Date.now }
   },
-  phase: { type: String, enum: ["scheduled", "ladder"], required: true },
+  phase: { type: String, enum: ["scheduled", "challenge"], required: true },
   completed: { type: Boolean, default: false },
   division: String,
   lmsEntered: { type: Boolean, default: false } // ADDED FIELD

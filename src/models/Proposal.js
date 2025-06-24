@@ -13,6 +13,8 @@ const proposalSchema = new mongoose.Schema({
   raceLength: Number,
   status: { type: String, default: "pending" },
   createdAt: { type: Date, default: Date.now },
+  phase: { type: String, default: "scheduled" },
+  division: { type: String },
   counterProposal: {
     date: String,
     time: String,

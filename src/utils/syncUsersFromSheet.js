@@ -1,5 +1,5 @@
 const fetchSheetData = require('./fetchSheetData');
-const User = require('./models/User');
+const User = require('../models/User');
 
 const sheetID = "1tvMgMHsRwQxsR6lMNlSnztmwpK7fhZeNEyqjTqmRFRc";
 const pinSheetName = "BCAPL SIGNUP";

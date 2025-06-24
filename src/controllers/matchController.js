@@ -5,6 +5,7 @@ const path = require('path');
 
 exports.getAllMatches = async (req, res) => {
   const { player, division } = req.query;
+  console.log('getAllMatches called with:', { player, division }); // Debug log
   if (!player) return res.status(400).json({ error: 'Missing player' });
 
   const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -20,7 +21,8 @@ exports.getAllMatches = async (req, res) => {
     ]
   };
   if (division) {
-    filter.division = { $in: [division] };
+    // Normalize division for case-insensitive match
+    filter.division = { $regex: new RegExp(`^${division.trim()}$`, 'i') };
   }
 
   try {
@@ -32,6 +34,8 @@ exports.getAllMatches = async (req, res) => {
     if (division) {
       const safeDivision = division.replace(/[^A-Za-z0-9]/g, '_');
       const schedulePath = path.join(__dirname, '../../public', `schedule_${safeDivision}.json`);
+      // Debug log
+      console.log('Requested division:', division, '| Safe division:', safeDivision, '| Schedule path:', schedulePath);
       if (fs.existsSync(schedulePath)) {
         const raw = fs.readFileSync(schedulePath, 'utf8');
         const allScheduled = JSON.parse(raw);
@@ -95,6 +99,7 @@ exports.getAllMatches = async (req, res) => {
 
 exports.getCompletedMatches = async (req, res) => {
   const { player, division } = req.query;
+  console.log('getCompletedMatches called with:', { player, division }); // Debug log
   if (!player) return res.status(400).json({ error: 'Missing player' });
 
   const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -110,7 +115,8 @@ exports.getCompletedMatches = async (req, res) => {
     ]
   };
   if (division) {
-    filter.division = { $in: [division] };
+    // Normalize division for case-insensitive match
+    filter.division = { $regex: new RegExp(`^${division.trim()}$`, 'i') };
   }
 
   try {

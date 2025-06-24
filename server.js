@@ -404,9 +404,10 @@ app.get('/api/all-matches', async (req, res) => {
   const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const playerRegex = new RegExp(`^${trimmedPlayer}$`, 'i');
 
+  // FIX: Only return proposals that are confirmed and NOT completed (counterProposal.completed !== true)
   const filter = {
     status: "confirmed",
-    completed: { $ne: true },
+    "counterProposal.completed": { $ne: true },
     $or: [
       { senderName: playerRegex },
       { receiverName: playerRegex }
@@ -418,14 +419,61 @@ app.get('/api/all-matches', async (req, res) => {
 
   try {
     const proposals = await Proposal.find(filter).lean();
-    console.log("FILTER:", filter);
-    console.log("FOUND MATCHES:", proposals.length, proposals.map(p => ({
-      senderName: p.senderName,
-      receiverName: p.receiverName,
-      status: p.status,
-      completed: p.completed,
-      division: p.division
-    })));
+    res.json(proposals);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch matches' });
+  }
+});
+app.get('/api/completed-matches', async (req, res) => {
+  const { player, division } = req.query;
+  if (!player) return res.status(400).json({ error: 'Missing player' });
+
+  const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const playerRegex = new RegExp(`^${trimmedPlayer}$`, 'i');
+
+  // Only return proposals that are confirmed and completed
+  const filter = {
+    status: "confirmed",
+    "counterProposal.completed": true,
+    $or: [
+      { senderName: playerRegex },
+      { receiverName: playerRegex }
+    ]
+  };
+  if (division) {
+    filter.division = { $in: [division] };
+  }
+
+  try {
+    const proposals = await Proposal.find(filter).lean();
+    res.json(proposals);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch completed matches' });
+  }
+});
+
+
+app.get('/api/completed-matches', async (req, res) => {
+  const { player, division } = req.query;
+  if (!player) return res.status(400).json({ error: 'Missing player' });
+
+  const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const playerRegex = new RegExp(`^${trimmedPlayer}$`, 'i');
+
+  const filter = {
+    status: "confirmed",
+    "counterProposal.completed": true,
+    $or: [
+      { senderName: playerRegex },
+      { receiverName: playerRegex }
+    ]
+  };
+  if (division) {
+    filter.division = { $in: [division] };
+  }
+
+  try {
+    const proposals = await Proposal.find(filter).lean();
     res.json(proposals);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch matches' });

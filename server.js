@@ -13,13 +13,12 @@ const Division = require('./models/Division');
 const app = express();
 const path = require('path');
 
-
 const allowedOrigins = [
   'https://frbcapl.github.io',
   'http://localhost:5173',
   'http://localhost:3000',
-  'https://www.frusapl.com', // <-- add your domain here
-  'https://frusapl.com'      // <-- add non-www version too, if needed
+  'https://www.frusapl.com',
+  'https://frusapl.com'
 ];
 
 app.use(cors({
@@ -52,7 +51,7 @@ const matchSchema = new mongoose.Schema({
   location: String,
   gameType: String,
   raceLength: String,
-  division: String, // <-- Added division field
+  division: String,
   createdAt: { type: Date, default: Date.now },
   completed: { type: Boolean, default: false }
 });
@@ -83,7 +82,8 @@ const proposalSchema = new mongoose.Schema({
   },
   phase: { type: String, enum: ["scheduled", "ladder"], required: true },
   completed: { type: Boolean, default: false },
-  division: String // <-- Added division field
+  division: String,
+  lmsEntered: { type: Boolean, default: false } // ADDED FIELD
 });
 proposalSchema.index({ receiverName: 1, status: 1 });
 proposalSchema.index({ receiver: 1, status: 1 });
@@ -181,7 +181,29 @@ app.get('/api/user/:idOrEmail', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
+// Get unentered matches
+app.get('/admin/unentered-matches', async (req, res) => {
+  try {
+    const matches = await Proposal.find({
+      status: "confirmed",
+      phase: "challenge",
+      lmsEntered: { $ne: true }
+    }).lean();
+    res.json(matches);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch unentered matches' });
+  }
+});
 
+// Mark match as entered in LMS
+app.patch('/admin/mark-lms-entered/:id', async (req, res) => {
+  try {
+    await Proposal.findByIdAndUpdate(req.params.id, { lmsEntered: true });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update match' });
+  }
+});
 
 // --- UPDATE USER DIVISION ---
 app.patch('/api/user/:id/division', async (req, res) => {
@@ -237,14 +259,19 @@ app.get('/admin/divisions', async (req, res) => {
 
 // --- SCHEDULE SCRAPE ENDPOINT ---
 app.post('/admin/update-schedule', (req, res) => {
-  exec('python scrape_schedule.py', (error, stdout, stderr) => {
+  const division = req.body.division;
+  // Sanitize for safe filenames
+  const safeDivision = division ? division.replace(/[^A-Za-z0-9]/g, '_') : 'default';
+  const filename = `public/schedule_${safeDivision}.json`;
+  let cmd = `python scrape_schedule.py "${division}" "${filename}"`;
+  exec(cmd, (error, stdout, stderr) => {
     if (error) {
-      console.error(`Error running scrape_schedule.py:`, error);
-      return res.status(500).json({ error: stderr || error.message });
+      return res.status(500).send(stderr || error.message);
     }
-    res.json({ message: stdout || "Schedule updated." });
+    res.send(stdout || "Schedule updated.");
   });
 });
+
 
 // --- MATCH/PROPOSAL/NOTES ENDPOINTS ---
 
@@ -282,7 +309,16 @@ app.post('/propose-match', async (req, res) => {
     console.error('Error upserting users or saving proposal:', err);
     return res.status(500).json({ error: 'Failed to upsert users or save proposal' });
   }
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log(`Stream token server running on port ${PORT}`);
+});
 
+cron.schedule('0 2 * * *', () => {
+  deleteExpiredMatchChannels()
+    .then(() => console.log('Expired channels cleaned up!'))
+    .catch(err => console.error('Cleanup failed:', err));
+});
   const channelName = `${userName1 || userId1} & ${userName2 || userId2}`;
   const allMembers = Array.from(new Set([cleanedUserId1, cleanedUserId2, ...ADMIN_EMAILS]));
   const channelData = {

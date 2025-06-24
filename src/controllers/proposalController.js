@@ -30,7 +30,10 @@ exports.getBySender = async (req, res) => {
 
 exports.create = async (req, res) => {
   try {
-    const proposal = new Proposal(req.body);
+    const data = { ...req.body };
+    if (!data.counterProposal) data.counterProposal = {};
+    data.counterProposal.completed = false;
+    const proposal = new Proposal(data);
     await proposal.save();
     res.status(201).json({ success: true, proposalId: proposal._id });
   } catch (err) {

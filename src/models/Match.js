@@ -9,7 +9,7 @@ const matchSchema = new mongoose.Schema({
   location: String,
   gameType: String,
   raceLength: String,
-  division: String,
+  divisions: [String],
   createdAt: { type: Date, default: Date.now },
   completed: { type: Boolean, default: false }
 });

@@ -4,7 +4,7 @@ exports.getByReceiver = async (req, res) => {
   try {
     const { receiverName, division } = req.query;
     const filter = { receiverName };
-    if (division) filter.division = division;
+    if (division) filter.divisions = { $in: [division] };
     
     const proposals = await Proposal.find(filter).lean();
     res.json(proposals);
@@ -18,7 +18,7 @@ exports.getBySender = async (req, res) => {
   try {
     const { senderName, division } = req.query;
     const filter = { senderName };
-    if (division) filter.division = division;
+    if (division) filter.divisions = { $in: [division] };
     
     const proposals = await Proposal.find(filter).lean();
     res.json(proposals);

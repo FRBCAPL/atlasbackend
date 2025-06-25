@@ -14,7 +14,7 @@ const proposalSchema = new mongoose.Schema({
   status: { type: String, default: "pending" },
   createdAt: { type: Date, default: Date.now },
   phase: { type: String, default: "scheduled" },
-  division: { type: String },
+  divisions: [{ type: String }],
   counterProposal: {
     date: String,
     time: String,

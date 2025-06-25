@@ -8,6 +8,7 @@ const { exec } = require('child_process');
 const { deleteExpiredMatchChannels } = require('./src/cleanupChannels');
 const { createMatchEvent } = require('./src/googleCalendar');
 const path = require('path');
+const Division = require('./models/Division');
 
 // Import routes
 const apiRoutes = require('./src/routes');
@@ -97,6 +98,16 @@ app.post('/admin/update-standings', (req, res) => {
     }
     res.send(stdout || "Schedule updated.");
   });
+});
+
+app.get('/admin/divisions', async (req, res) => {
+  try {
+    const divisions = await Division.find({}, { _id: 0, name: 1, description: 1 }).lean();
+    res.json(divisions);
+  } catch (err) {
+    console.error('Error fetching divisions:', err);
+    res.status(500).json({ error: 'Failed to fetch divisions' });
+  }
 });
 
 // Health check

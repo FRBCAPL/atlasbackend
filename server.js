@@ -1,14 +1,13 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const mongoose = require('mongoose');
 const { StreamChat } = require('stream-chat');
 const cron = require('node-cron');
 const { exec } = require('child_process');
 const { deleteExpiredMatchChannels } = require('./src/cleanupChannels');
 const { createMatchEvent } = require('./src/googleCalendar');
 const path = require('path');
-const Division = require('./models/Division');
+const { pool, testConnection, initializeDatabase } = require('./database');
 
 // Import routes
 const apiRoutes = require('./src/routes');
@@ -20,7 +19,9 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'https://www.frusapl.com',
-  'https://frusapl.com'
+  'https://frusapl.com',
+  'https://www.frontrangepool.com',
+  'https://frontrangepool.com'
 ];
 
 app.use(cors({
@@ -36,13 +37,26 @@ app.use(cors({
 app.use('/static', express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// Database connection
-mongoose.connect(process.env.MONGO_URI, {
-  maxPoolSize: 20,
-  serverSelectionTimeoutMS: 5000,
-})
-  .then(() => console.log("MongoDB is connected!"))
-  .catch(err => console.error("MongoDB connection error:", err));
+// Database connection and initialization
+async function setupDatabase() {
+  try {
+    // Test connection
+    const connected = await testConnection();
+    if (!connected) {
+      throw new Error('Database connection failed');
+    }
+    
+    // Initialize tables
+    await initializeDatabase();
+    console.log("✅ MySQL database setup complete!");
+  } catch (err) {
+    console.error("❌ Database setup error:", err);
+    process.exit(1);
+  }
+}
+
+// Initialize database on startup
+setupDatabase();
 
 // Stream Chat setup
 const apiKey = process.env.STREAM_API_KEY;
@@ -102,8 +116,8 @@ app.post('/admin/update-standings', (req, res) => {
 
 app.get('/admin/divisions', async (req, res) => {
   try {
-    const divisions = await Division.find({}, { _id: 0, name: 1, description: 1 }).lean();
-    res.json(divisions);
+    const [rows] = await pool.execute('SELECT name, description FROM divisions');
+    res.json(rows);
   } catch (err) {
     console.error('Error fetching divisions:', err);
     res.status(500).json({ error: 'Failed to fetch divisions' });
@@ -121,7 +135,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
 
 // Cron job for cleanup

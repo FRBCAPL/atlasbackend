@@ -256,7 +256,7 @@ app.patch('/admin/user/:userId/remove-division', async (req, res) => {
 
 app.post('/admin/sync-users', async (req, res) => {
   try {
-    const { syncUsersFromSheet } = require('./src/utils/syncUsersFromSheet');
+    const syncUsersFromSheet = require('./src/utils/syncUsersFromSheet');
     await syncUsersFromSheet();
     res.json({ success: true, message: 'Users synced successfully' });
   } catch (err) {
@@ -283,11 +283,11 @@ app.get('/api/db-usage', async (req, res) => {
     
     for (const collection of collections) {
       try {
-        const collStats = await db.collection(collection.name).stats();
+        const count = await db.collection(collection.name).countDocuments();
         collectionStats.push({
           name: collection.name,
-          sizeMB: (collStats.size / (1024 * 1024)).toFixed(2),
-          count: collStats.count
+          sizeMB: "0.00", // We can't get exact size without stats()
+          count: count
         });
       } catch (err) {
         console.error(`Error getting stats for collection ${collection.name}:`, err);

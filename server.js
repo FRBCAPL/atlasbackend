@@ -1,13 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const mongoose = require('mongoose');
 const { StreamChat } = require('stream-chat');
 const cron = require('node-cron');
 const { exec } = require('child_process');
 const { deleteExpiredMatchChannels } = require('./src/cleanupChannels');
 const { createMatchEvent } = require('./src/googleCalendar');
 const path = require('path');
-const { pool, testConnection, initializeDatabase } = require('./database');
+const Division = require('./models/Division');
 
 // Import routes
 const apiRoutes = require('./src/routes');
@@ -37,26 +38,17 @@ app.use(cors({
 app.use('/static', express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// Database connection and initialization
-async function setupDatabase() {
-  try {
-    // Test connection
-    const connected = await testConnection();
-    if (!connected) {
-      throw new Error('Database connection failed');
-    }
-    
-    // Initialize tables
-    await initializeDatabase();
-    console.log("✅ MySQL database setup complete!");
-  } catch (err) {
-    console.error("❌ Database setup error:", err);
-    process.exit(1);
-  }
-}
-
-// Initialize database on startup
-setupDatabase();
+// Database connection
+mongoose.connect(process.env.MONGO_URI, {
+  maxPoolSize: 20,
+  serverSelectionTimeoutMS: 5000,
+})
+  .then(() => {
+    console.log("MongoDB is connected!");
+    // Log database usage after connection is established
+    setTimeout(logDatabaseUsage, 2000);
+  })
+  .catch(err => console.error("MongoDB connection error:", err));
 
 // Stream Chat setup
 const apiKey = process.env.STREAM_API_KEY;
@@ -116,8 +108,8 @@ app.post('/admin/update-standings', (req, res) => {
 
 app.get('/admin/divisions', async (req, res) => {
   try {
-    const [rows] = await pool.execute('SELECT name, description FROM divisions');
-    res.json(rows);
+    const divisions = await Division.find({}, { _id: 0, name: 1, description: 1 }).lean();
+    res.json(divisions);
   } catch (err) {
     console.error('Error fetching divisions:', err);
     res.status(500).json({ error: 'Failed to fetch divisions' });
@@ -144,5 +136,35 @@ cron.schedule('0 2 * * *', () => {
     .then(() => console.log('Expired channels cleaned up!'))
     .catch(err => console.error('Cleanup failed:', err));
 });
+
+// Add database usage logging on startup
+async function logDatabaseUsage() {
+  try {
+    const db = mongoose.connection.db;
+    if (db) {
+      const stats = await db.stats();
+      const storageUsedMB = (stats.dataSize + stats.indexSize) / (1024 * 1024);
+      const storageLimitMB = 512;
+      const usagePercentage = (storageUsedMB / storageLimitMB) * 100;
+      
+      console.log('=== DATABASE USAGE ===');
+      console.log(`Storage Used: ${storageUsedMB.toFixed(2)} MB / ${storageLimitMB} MB`);
+      console.log(`Usage: ${usagePercentage.toFixed(1)}%`);
+      
+      if (usagePercentage > 95) {
+        console.log('🚨 CRITICAL: Database storage limit nearly reached!');
+      } else if (usagePercentage > 80) {
+        console.log('⚠️ WARNING: Database storage limit approaching!');
+      } else if (usagePercentage > 60) {
+        console.log('📊 INFO: Database usage is moderate');
+      } else {
+        console.log('✅ Database usage is healthy');
+      }
+      console.log('=====================');
+    }
+  } catch (err) {
+    console.log('Could not check database usage:', err.message);
+  }
+}
 
 module.exports = app; 

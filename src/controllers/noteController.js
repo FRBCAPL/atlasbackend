@@ -1,8 +1,8 @@
-const { pool } = require('../../database');
+const Note = require('../models/Note');
 
 exports.getAll = async (req, res) => {
   try {
-    const [notes] = await pool.execute('SELECT * FROM notes ORDER BY createdAt DESC');
+    const notes = await Note.find().sort({ createdAt: -1 }).lean();
     res.json(notes);
   } catch (err) {
     console.error('Error fetching notes:', err);
@@ -15,13 +15,9 @@ exports.create = async (req, res) => {
     if (!req.body.text || !req.body.text.trim()) {
       return res.status(400).json({ error: 'Note text required' });
     }
-    
-    const query = 'INSERT INTO notes (content) VALUES (?)';
-    const [result] = await pool.execute(query, [req.body.text.trim()]);
-    
-    // Get the created note
-    const [notes] = await pool.execute('SELECT * FROM notes WHERE id = ?', [result.insertId]);
-    res.status(201).json(notes[0]);
+    const note = new Note({ text: req.body.text.trim() });
+    await note.save();
+    res.status(201).json(note);
   } catch (err) {
     console.error('Error saving note:', err);
     res.status(500).json({ error: 'Failed to save note' });
@@ -30,7 +26,7 @@ exports.create = async (req, res) => {
 
 exports.delete = async (req, res) => {
   try {
-    await pool.execute('DELETE FROM notes WHERE id = ?', [req.params.id]);
+    await Note.findByIdAndDelete(req.params.id);
     res.status(204).end();
   } catch (err) {
     console.error('Error deleting note:', err);

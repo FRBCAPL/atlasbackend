@@ -96,13 +96,13 @@ app.use('/api', apiRoutes);
 app.post('/admin/update-standings', (req, res) => {
   const division = req.body.division;
   const safeDivision = division ? division.replace(/[^A-Za-z0-9]/g, '_') : 'default';
-  const filename = `public/schedule_${safeDivision}.json`;
-  let cmd = `python scripts/scrape_schedule.py "${division}" "${filename}"`;
+  const filename = `public/standings_${safeDivision}.json`;
+  let cmd = `python scripts/scrape_standings.py "${division}" "${filename}"`;
   exec(cmd, (error, stdout, stderr) => {
     if (error) {
-      return res.status(500).send(stderr || error.message);
+      return res.status(500).json({ error: stderr || error.message });
     }
-    res.send(stdout || "Schedule updated.");
+    res.json({ message: stdout || "Standings updated successfully!" });
   });
 });
 
@@ -322,6 +322,28 @@ app.get('/admin/unentered-matches', async (req, res) => {
   } catch (err) {
     console.error('Error fetching unentered matches:', err);
     res.status(500).json({ error: 'Failed to fetch unentered matches' });
+  }
+});
+
+app.patch('/admin/mark-lms-entered/:matchId', async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const Match = require('./models/Match');
+    
+    const match = await Match.findByIdAndUpdate(
+      matchId,
+      { lmsEntered: true },
+      { new: true }
+    );
+    
+    if (!match) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+    
+    res.json({ success: true, match });
+  } catch (err) {
+    console.error('Error marking match as LMS entered:', err);
+    res.status(500).json({ error: 'Failed to mark match as entered' });
   }
 });
 

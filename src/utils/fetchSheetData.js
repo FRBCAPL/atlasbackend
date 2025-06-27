@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 // Use your actual API key here or load from .env
-const API_KEY = process.env.VITE_GOOGLE_SHEETS_API_KEY || 'AIzaSyCr05_9Bg1oZE7uJcGg48mWzOo4rLjxTQ8';
+const API_KEY = process.env.GOOGLE_SHEETS_API_KEY || 'AIzaSyCr05_9Bg1oZE7uJcGg48mWzOo4rLjxTQ8';
 
 /**
  * Fetches rows from a public Google Sheet using the Sheets API.

@@ -1,12 +1,17 @@
-const Proposal = require('../models/Proposal');
+const { pool } = require('../../database');
 
 exports.getByReceiver = async (req, res) => {
   try {
     const { receiverName, division } = req.query;
-    const filter = { receiverName };
-    if (division) filter.divisions = { $in: [division] };
+    let query = 'SELECT * FROM proposals WHERE receiverName = ?';
+    let params = [receiverName];
     
-    const proposals = await Proposal.find(filter).lean();
+    if (division) {
+      query += ' AND JSON_CONTAINS(divisions, ?)';
+      params.push(JSON.stringify(division));
+    }
+    
+    const [proposals] = await pool.execute(query, params);
     res.json(proposals);
   } catch (err) {
     console.error('Error fetching proposals by receiver:', err);
@@ -17,10 +22,15 @@ exports.getByReceiver = async (req, res) => {
 exports.getBySender = async (req, res) => {
   try {
     const { senderName, division } = req.query;
-    const filter = { senderName };
-    if (division) filter.divisions = { $in: [division] };
+    let query = 'SELECT * FROM proposals WHERE senderName = ?';
+    let params = [senderName];
     
-    const proposals = await Proposal.find(filter).lean();
+    if (division) {
+      query += ' AND JSON_CONTAINS(divisions, ?)';
+      params.push(JSON.stringify(division));
+    }
+    
+    const [proposals] = await pool.execute(query, params);
     res.json(proposals);
   } catch (err) {
     console.error('Error fetching proposals by sender:', err);
@@ -31,11 +41,34 @@ exports.getBySender = async (req, res) => {
 exports.create = async (req, res) => {
   try {
     const data = { ...req.body };
-    if (!data.counterProposal) data.counterProposal = {};
-    data.counterProposal.completed = false;
-    const proposal = new Proposal(data);
-    await proposal.save();
-    res.status(201).json({ success: true, proposalId: proposal._id });
+    const counterProposal = data.counterProposal || {};
+    counterProposal.completed = false;
+    
+    const query = `
+      INSERT INTO proposals (
+        sender, receiver, senderName, receiverName, date, time, location, 
+        message, gameType, raceLength, phase, divisions, counterProposal
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    const params = [
+      data.sender,
+      data.receiver,
+      data.senderName,
+      data.receiverName,
+      data.date,
+      data.time,
+      data.location,
+      data.message,
+      data.gameType,
+      data.raceLength,
+      data.phase || 'scheduled',
+      JSON.stringify(data.divisions || []),
+      JSON.stringify(counterProposal)
+    ];
+    
+    const [result] = await pool.execute(query, params);
+    res.status(201).json({ success: true, proposalId: result.insertId });
   } catch (err) {
     console.error('Error creating proposal:', err);
     res.status(500).json({ error: 'Failed to create proposal' });
@@ -47,7 +80,8 @@ exports.updateStatus = async (req, res) => {
     const { id } = req.params;
     const { status, note } = req.body;
     
-    await Proposal.findByIdAndUpdate(id, { status, note });
+    const query = 'UPDATE proposals SET status = ?, note = ? WHERE id = ?';
+    await pool.execute(query, [status, note, id]);
     res.json({ success: true });
   } catch (err) {
     console.error('Error updating proposal status:', err);
@@ -60,10 +94,8 @@ exports.counter = async (req, res) => {
     const { id } = req.params;
     const counterData = req.body;
     
-    await Proposal.findByIdAndUpdate(id, { 
-      counterProposal: counterData,
-      status: 'countered'
-    });
+    const query = 'UPDATE proposals SET counterProposal = ?, status = ? WHERE id = ?';
+    await pool.execute(query, [JSON.stringify(counterData), 'countered', id]);
     res.json({ success: true });
   } catch (err) {
     console.error('Error countering proposal:', err);
@@ -73,7 +105,7 @@ exports.counter = async (req, res) => {
 
 exports.debugList = async (req, res) => {
   try {
-    const proposals = await Proposal.find({}, { _id: 1, senderName: 1, receiverName: 1 });
+    const [proposals] = await pool.execute('SELECT id, senderName, receiverName FROM proposals');
     res.json(proposals);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch proposals' });

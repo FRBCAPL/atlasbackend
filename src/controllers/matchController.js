@@ -1,4 +1,5 @@
-const { pool } = require('../../database');
+const Proposal = require('../models/Proposal');
+const Match = require('../models/Match');
 const fs = require('fs');
 const path = require('path');
 
@@ -7,21 +8,25 @@ exports.getAllMatches = async (req, res) => {
   console.log('getAllMatches called with:', { player, division }); // Debug log
   if (!player) return res.status(400).json({ error: 'Missing player' });
 
+  const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const playerRegex = new RegExp(`^${trimmedPlayer}$`, 'i');
+
+  const filter = {
+    status: "confirmed",
+    "counterProposal.completed": { $ne: true },
+    $or: [
+      { senderName: playerRegex },
+      { receiverName: playerRegex }
+    ]
+  };
+  if (division) {
+    filter.divisions = { $in: [division] };
+  }
+
+  console.log('MongoDB filter:', JSON.stringify(filter, null, 2)); // Log the filter
+
   try {
-    let query = `
-      SELECT * FROM proposals 
-      WHERE status = 'confirmed' 
-      AND (JSON_EXTRACT(counterProposal, '$.completed') != true OR counterProposal IS NULL)
-      AND (senderName = ? OR receiverName = ?)
-    `;
-    let params = [player.trim(), player.trim()];
-    
-    if (division) {
-      query += ' AND JSON_CONTAINS(divisions, ?)';
-      params.push(JSON.stringify(division));
-    }
-    
-    const [proposals] = await pool.execute(query, params);
+    const proposals = await Proposal.find(filter).lean();
     console.log('Proposals found:', proposals); // Log the proposals found
     const merged = proposals.map(p => ({ ...p, type: 'proposal' }));
     res.json(merged);
@@ -36,21 +41,25 @@ exports.getCompletedMatches = async (req, res) => {
   console.log('getCompletedMatches called with:', { player, division }); // Debug log
   if (!player) return res.status(400).json({ error: 'Missing player' });
 
+  const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const playerRegex = new RegExp(`^${trimmedPlayer}$`, 'i');
+
+  // Only return proposals that are confirmed and completed
+  const filter = {
+    status: "confirmed",
+    "counterProposal.completed": true,
+    $or: [
+      { senderName: playerRegex },
+      { receiverName: playerRegex }
+    ]
+  };
+  if (division) {
+    // Use $in to match division in divisions array
+    filter.divisions = { $in: [division] };
+  }
+
   try {
-    let query = `
-      SELECT * FROM proposals 
-      WHERE status = 'confirmed' 
-      AND JSON_EXTRACT(counterProposal, '$.completed') = true
-      AND (senderName = ? OR receiverName = ?)
-    `;
-    let params = [player.trim(), player.trim()];
-    
-    if (division) {
-      query += ' AND JSON_CONTAINS(divisions, ?)';
-      params.push(JSON.stringify(division));
-    }
-    
-    const [proposals] = await pool.execute(query, params);
+    const proposals = await Proposal.find(filter).lean();
     res.json(proposals);
   } catch (err) {
     console.error('Error fetching completed matches:', err);
@@ -60,31 +69,9 @@ exports.getCompletedMatches = async (req, res) => {
 
 exports.create = async (req, res) => {
   try {
-    const data = req.body;
-    const query = `
-      INSERT INTO matches (
-        player1, player2, player1Name, player2Name, date, time, location,
-        gameType, raceLength, phase, division, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    
-    const params = [
-      data.player1,
-      data.player2,
-      data.player1Name,
-      data.player2Name,
-      data.date,
-      data.time,
-      data.location,
-      data.gameType,
-      data.raceLength,
-      data.phase || 'scheduled',
-      data.division,
-      data.status || 'scheduled'
-    ];
-    
-    const [result] = await pool.execute(query, params);
-    res.json({ success: true, matchId: result.insertId });
+    const match = new Match(req.body);
+    await match.save();
+    res.json({ success: true, match });
   } catch (err) {
     console.error('Error saving match:', err);
     res.status(500).json({ error: 'Failed to save match' });
@@ -94,17 +81,19 @@ exports.create = async (req, res) => {
 exports.markMatchCompleted = async (req, res) => {
   const { id } = req.params;
   if (!id) return res.status(400).json({ error: 'Missing proposal ID' });
-  
   try {
     console.log('Marking proposal as completed, id:', id);
-    
-    // Update the counterProposal to mark as completed
-    const counterProposal = JSON.stringify({ completed: true });
-    const query = 'UPDATE proposals SET counterProposal = ? WHERE id = ?';
-    await pool.execute(query, [counterProposal, id]);
-    
-    console.log('Update completed for proposal id:', id);
-    res.json({ success: true });
+    // Fetch the proposal first
+    const proposal = await Proposal.findById(id);
+    if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+    if (!proposal.counterProposal) {
+      proposal.counterProposal = { completed: true };
+    } else {
+      proposal.counterProposal.completed = true;
+    }
+    await proposal.save();
+    console.log('Update result:', proposal);
+    res.json({ success: true, proposal });
   } catch (err) {
     console.error('Error marking match as completed:', err);
     res.status(500).json({ error: 'Failed to mark match as completed' });

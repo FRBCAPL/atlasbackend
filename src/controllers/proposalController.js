@@ -1,17 +1,12 @@
-const { pool } = require('../../database');
+const Proposal = require('../models/Proposal');
 
 exports.getByReceiver = async (req, res) => {
   try {
     const { receiverName, division } = req.query;
-    let query = 'SELECT * FROM proposals WHERE receiverName = ?';
-    let params = [receiverName];
+    const filter = { receiverName };
+    if (division) filter.divisions = { $in: [division] };
     
-    if (division) {
-      query += ' AND JSON_CONTAINS(divisions, ?)';
-      params.push(JSON.stringify(division));
-    }
-    
-    const [proposals] = await pool.execute(query, params);
+    const proposals = await Proposal.find(filter).lean();
     res.json(proposals);
   } catch (err) {
     console.error('Error fetching proposals by receiver:', err);
@@ -22,15 +17,10 @@ exports.getByReceiver = async (req, res) => {
 exports.getBySender = async (req, res) => {
   try {
     const { senderName, division } = req.query;
-    let query = 'SELECT * FROM proposals WHERE senderName = ?';
-    let params = [senderName];
+    const filter = { senderName };
+    if (division) filter.divisions = { $in: [division] };
     
-    if (division) {
-      query += ' AND JSON_CONTAINS(divisions, ?)';
-      params.push(JSON.stringify(division));
-    }
-    
-    const [proposals] = await pool.execute(query, params);
+    const proposals = await Proposal.find(filter).lean();
     res.json(proposals);
   } catch (err) {
     console.error('Error fetching proposals by sender:', err);
@@ -41,34 +31,11 @@ exports.getBySender = async (req, res) => {
 exports.create = async (req, res) => {
   try {
     const data = { ...req.body };
-    const counterProposal = data.counterProposal || {};
-    counterProposal.completed = false;
-    
-    const query = `
-      INSERT INTO proposals (
-        sender, receiver, senderName, receiverName, date, time, location, 
-        message, gameType, raceLength, phase, divisions, counterProposal
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    
-    const params = [
-      data.sender,
-      data.receiver,
-      data.senderName,
-      data.receiverName,
-      data.date,
-      data.time,
-      data.location,
-      data.message,
-      data.gameType,
-      data.raceLength,
-      data.phase || 'scheduled',
-      JSON.stringify(data.divisions || []),
-      JSON.stringify(counterProposal)
-    ];
-    
-    const [result] = await pool.execute(query, params);
-    res.status(201).json({ success: true, proposalId: result.insertId });
+    if (!data.counterProposal) data.counterProposal = {};
+    data.counterProposal.completed = false;
+    const proposal = new Proposal(data);
+    await proposal.save();
+    res.status(201).json({ success: true, proposalId: proposal._id });
   } catch (err) {
     console.error('Error creating proposal:', err);
     res.status(500).json({ error: 'Failed to create proposal' });
@@ -80,8 +47,7 @@ exports.updateStatus = async (req, res) => {
     const { id } = req.params;
     const { status, note } = req.body;
     
-    const query = 'UPDATE proposals SET status = ?, note = ? WHERE id = ?';
-    await pool.execute(query, [status, note, id]);
+    await Proposal.findByIdAndUpdate(id, { status, note });
     res.json({ success: true });
   } catch (err) {
     console.error('Error updating proposal status:', err);
@@ -94,8 +60,10 @@ exports.counter = async (req, res) => {
     const { id } = req.params;
     const counterData = req.body;
     
-    const query = 'UPDATE proposals SET counterProposal = ?, status = ? WHERE id = ?';
-    await pool.execute(query, [JSON.stringify(counterData), 'countered', id]);
+    await Proposal.findByIdAndUpdate(id, { 
+      counterProposal: counterData,
+      status: 'countered'
+    });
     res.json({ success: true });
   } catch (err) {
     console.error('Error countering proposal:', err);
@@ -105,7 +73,7 @@ exports.counter = async (req, res) => {
 
 exports.debugList = async (req, res) => {
   try {
-    const [proposals] = await pool.execute('SELECT id, senderName, receiverName FROM proposals');
+    const proposals = await Proposal.find({}, { _id: 1, senderName: 1, receiverName: 1 });
     res.json(proposals);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch proposals' });

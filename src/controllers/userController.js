@@ -1,6 +1,16 @@
 const User = require('../models/User');
 const syncSheetUsersToMongo = require('../utils/syncUsersFromSheet');
 
+exports.getAllUsers = async (req, res) => {
+  try {
+    const users = await User.find({}).lean();
+    res.json(users);
+  } catch (err) {
+    console.error('Error fetching all users:', err);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+};
+
 exports.getUser = async (req, res) => {
   try {
     const idOrEmail = decodeURIComponent(req.params.idOrEmail);

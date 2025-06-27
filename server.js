@@ -106,6 +106,19 @@ app.post('/admin/update-standings', (req, res) => {
   });
 });
 
+app.post('/admin/update-schedule', (req, res) => {
+  const division = req.body.division;
+  const safeDivision = division ? division.replace(/[^A-Za-z0-9]/g, '_') : 'default';
+  const filename = `public/schedule_${safeDivision}.json`;
+  let cmd = `python scripts/scrape_schedule.py "${division}" "${filename}"`;
+  exec(cmd, (error, stdout, stderr) => {
+    if (error) {
+      return res.status(500).json({ error: stderr || error.message });
+    }
+    res.json({ message: stdout || "Schedule updated successfully!" });
+  });
+});
+
 app.get('/admin/divisions', async (req, res) => {
   try {
     const divisions = await Division.find({}, { _id: 0, name: 1, description: 1 }).lean();
@@ -113,6 +126,202 @@ app.get('/admin/divisions', async (req, res) => {
   } catch (err) {
     console.error('Error fetching divisions:', err);
     res.status(500).json({ error: 'Failed to fetch divisions' });
+  }
+});
+
+app.post('/admin/divisions', async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Division name is required' });
+    }
+    
+    const existingDivision = await Division.findOne({ name });
+    if (existingDivision) {
+      return res.status(400).json({ error: 'Division already exists' });
+    }
+    
+    const division = new Division({ name, description });
+    await division.save();
+    res.json({ success: true, division });
+  } catch (err) {
+    console.error('Error creating division:', err);
+    res.status(500).json({ error: 'Failed to create division' });
+  }
+});
+
+app.get('/admin/search-users', async (req, res) => {
+  try {
+    const { query } = req.query;
+    if (!query) {
+      return res.json([]);
+    }
+    
+    const User = require('./models/User');
+    const users = await User.find({
+      $or: [
+        { name: { $regex: query, $options: 'i' } },
+        { email: { $regex: query, $options: 'i' } }
+      ]
+    }).lean();
+    
+    res.json(users);
+  } catch (err) {
+    console.error('Error searching users:', err);
+    res.status(500).json({ error: 'Failed to search users' });
+  }
+});
+
+app.post('/admin/convert-divisions', async (req, res) => {
+  try {
+    const User = require('./models/User');
+    const users = await User.find({});
+    let modified = 0;
+    
+    for (const user of users) {
+      if (user.division && !Array.isArray(user.divisions)) {
+        // Convert string division to array
+        user.divisions = [user.division];
+        await user.save();
+        modified++;
+      }
+    }
+    
+    res.json({ success: true, modified });
+  } catch (err) {
+    console.error('Error converting divisions:', err);
+    res.status(500).json({ error: 'Failed to convert divisions' });
+  }
+});
+
+app.patch('/admin/user/:userId/add-division', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { division } = req.body;
+    
+    if (!division) {
+      return res.status(400).json({ error: 'Division is required' });
+    }
+    
+    const User = require('./models/User');
+    const user = await User.findOne({ $or: [{ email: userId }, { id: userId }] });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    if (!user.divisions) {
+      user.divisions = [];
+    }
+    
+    if (!user.divisions.includes(division)) {
+      user.divisions.push(division);
+      await user.save();
+    }
+    
+    res.json({ success: true, user });
+  } catch (err) {
+    console.error('Error adding division to user:', err);
+    res.status(500).json({ error: 'Failed to add division to user' });
+  }
+});
+
+app.patch('/admin/user/:userId/remove-division', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { division } = req.body;
+    
+    if (!division) {
+      return res.status(400).json({ error: 'Division is required' });
+    }
+    
+    const User = require('./models/User');
+    const user = await User.findOne({ $or: [{ email: userId }, { id: userId }] });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    if (user.divisions) {
+      user.divisions = user.divisions.filter(d => d !== division);
+      await user.save();
+    }
+    
+    res.json({ success: true, user });
+  } catch (err) {
+    console.error('Error removing division from user:', err);
+    res.status(500).json({ error: 'Failed to remove division from user' });
+  }
+});
+
+app.post('/admin/sync-users', async (req, res) => {
+  try {
+    const { syncUsersFromSheet } = require('./src/utils/syncUsersFromSheet');
+    await syncUsersFromSheet();
+    res.json({ success: true, message: 'Users synced successfully' });
+  } catch (err) {
+    console.error('Error syncing users:', err);
+    res.status(500).json({ error: 'Failed to sync users' });
+  }
+});
+
+app.get('/api/db-usage', async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    if (!db) {
+      return res.status(500).json({ error: 'Database not connected' });
+    }
+
+    const stats = await db.stats();
+    const storageUsedMB = (stats.dataSize + stats.indexSize) / (1024 * 1024);
+    const storageLimitMB = 512; // MongoDB Atlas free tier limit
+    const usagePercentage = (storageUsedMB / storageLimitMB) * 100;
+
+    // Get collection stats
+    const collections = await db.listCollections().toArray();
+    const collectionStats = [];
+    
+    for (const collection of collections) {
+      try {
+        const collStats = await db.collection(collection.name).stats();
+        collectionStats.push({
+          name: collection.name,
+          sizeMB: (collStats.size / (1024 * 1024)).toFixed(2),
+          count: collStats.count
+        });
+      } catch (err) {
+        console.error(`Error getting stats for collection ${collection.name}:`, err);
+      }
+    }
+
+    const result = {
+      storageUsedMB: storageUsedMB.toFixed(2),
+      storageLimitMB,
+      usagePercentage: usagePercentage.toFixed(1),
+      collections: collectionStats,
+      warning: usagePercentage > 80 ? 'Database storage limit approaching!' : null,
+      critical: usagePercentage > 95 ? 'Database storage limit nearly reached!' : null
+    };
+
+    res.json(result);
+  } catch (err) {
+    console.error('Error getting database usage:', err);
+    res.status(500).json({ error: 'Failed to get database usage' });
+  }
+});
+
+app.get('/admin/unentered-matches', async (req, res) => {
+  try {
+    const Match = require('./models/Match');
+    const matches = await Match.find({ 
+      completed: { $ne: true },
+      confirmed: true 
+    }).populate('player1 player2').lean();
+    
+    res.json(matches);
+  } catch (err) {
+    console.error('Error fetching unentered matches:', err);
+    res.status(500).json({ error: 'Failed to fetch unentered matches' });
   }
 });
 

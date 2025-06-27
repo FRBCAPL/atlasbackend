@@ -94,16 +94,35 @@ app.use('/api', apiRoutes);
 
 // Admin endpoints
 app.post('/admin/update-standings', (req, res) => {
-  const division = req.body.division;
-  const safeDivision = division ? division.replace(/[^A-Za-z0-9]/g, '_') : 'default';
-  const filename = `public/standings_${safeDivision}.json`;
-  let cmd = `python scripts/scrape_standings.py "${division}" "${filename}"`;
+  // Use the new multi-division scraper
+  const cmd = `python scripts/scrape_all_standings.py`;
   exec(cmd, (error, stdout, stderr) => {
     if (error) {
+      console.error('Standings update error:', error);
       return res.status(500).json({ error: stderr || error.message });
     }
-    res.json({ message: stdout || "Standings updated successfully!" });
+    console.log('Standings update output:', stdout);
+    res.json({ message: stdout || "All standings updated successfully!" });
   });
+});
+
+// Use dynamic import for node-fetch (ESM only)
+const fetch = (...args) => import('node-fetch').then(mod => mod.default(...args));
+app.post('/admin/fetch-standings', async (req, res) => {
+  const { standingsUrl } = req.body;
+  if (!standingsUrl) {
+    return res.status(400).json({ error: 'standingsUrl required' });
+  }
+  try {
+    const response = await fetch(standingsUrl);
+    if (!response.ok) throw new Error('Failed to fetch standings');
+    const html = await response.text();
+    // TODO: Parse the HTML and extract standings as JSON
+    // For now, just return the HTML for debugging:
+    return res.json({ html });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/admin/update-schedule', (req, res) => {
@@ -354,6 +373,33 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something went wrong!' });
+});
+
+// Serve division-specific standings JSON
+app.get('/static/standings_:division.json', (req, res) => {
+  const division = req.params.division;
+  const filePath = path.join(__dirname, 'public', `standings_${division}.json`);
+  
+  console.log(`📊 Standings request for division: ${division}`);
+  console.log(`📊 File path: ${filePath}`);
+  
+  // Check if file exists
+  if (!require('fs').existsSync(filePath)) {
+    console.error(`❌ Standings file not found: ${filePath}`);
+    return res.status(404).json({ 
+      error: `Standings file not found for division: ${division}`,
+      filePath: filePath
+    });
+  }
+  
+  res.sendFile(filePath, (err) => {
+    if (err) {
+      console.error(`❌ Error sending standings file: ${err.message}`);
+      res.status(500).json({ error: 'Failed to send standings file' });
+    } else {
+      console.log(`✅ Standings file sent successfully: ${filePath}`);
+    }
+  });
 });
 
 const PORT = process.env.PORT || 8080;

@@ -31,7 +31,13 @@ exports.getAllMatches = async (req, res) => {
     filter.divisions = { $in: [division] };
   }
 
-  console.log('MongoDB filter:', JSON.stringify(filter, null, 2)); // Log the filter
+  // Log the filter in a way that shows the regex properly
+  console.log('MongoDB filter (stringified):', JSON.stringify(filter, (key, value) => {
+    if (value instanceof RegExp) {
+      return value.toString();
+    }
+    return value;
+  }, 2));
 
   try {
     const proposals = await Proposal.find(filter).lean();
@@ -73,6 +79,14 @@ exports.getCompletedMatches = async (req, res) => {
     // Use $in to match division in divisions array
     filter.divisions = { $in: [division] };
   }
+
+  // Log the filter in a way that shows the regex properly
+  console.log('MongoDB filter (completed, stringified):', JSON.stringify(filter, (key, value) => {
+    if (value instanceof RegExp) {
+      return value.toString();
+    }
+    return value;
+  }, 2));
 
   try {
     const proposals = await Proposal.find(filter).lean();

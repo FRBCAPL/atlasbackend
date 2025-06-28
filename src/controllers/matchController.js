@@ -8,8 +8,16 @@ exports.getAllMatches = async (req, res) => {
   console.log('getAllMatches called with:', { player, division }); // Debug log
   if (!player) return res.status(400).json({ error: 'Missing player' });
 
+  // Add more detailed logging
+  console.log('Raw player name:', player);
+  console.log('Player name type:', typeof player);
+  console.log('Player name length:', player.length);
+
   const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  console.log('Trimmed and escaped player name:', trimmedPlayer);
+  
   const playerRegex = new RegExp(`^${trimmedPlayer}$`, 'i');
+  console.log('Created regex:', playerRegex);
 
   const filter = {
     status: "confirmed",
@@ -41,8 +49,16 @@ exports.getCompletedMatches = async (req, res) => {
   console.log('getCompletedMatches called with:', { player, division }); // Debug log
   if (!player) return res.status(400).json({ error: 'Missing player' });
 
+  // Add more detailed logging
+  console.log('Raw player name (completed):', player);
+  console.log('Player name type (completed):', typeof player);
+  console.log('Player name length (completed):', player.length);
+
   const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  console.log('Trimmed and escaped player name (completed):', trimmedPlayer);
+  
   const playerRegex = new RegExp(`^${trimmedPlayer}$`, 'i');
+  console.log('Created regex (completed):', playerRegex);
 
   // Only return proposals that are confirmed and completed
   const filter = {

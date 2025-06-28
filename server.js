@@ -22,16 +22,21 @@ const allowedOrigins = [
   'https://www.frusapl.com',
   'https://frusapl.com',
   'https://www.frontrangepool.com',
-  'https://frontrangepool.com'
+  'https://frontrangepool.com',
+  '*' // Temporarily allow all origins for testing
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
+    // Temporarily allow all origins for testing
+    callback(null, true);
+    
+    // Original logic (commented out for now):
+    // if (!origin || allowedOrigins.includes(origin)) {
+    //   callback(null, true);
+    // } else {
+    //   callback(new Error('Not allowed by CORS'));
+    // }
   }
 }));
 

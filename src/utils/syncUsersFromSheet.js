@@ -18,12 +18,16 @@ async function syncSheetUsersToMongo() {
 
     const users = dataRows
       .filter(row => row[2]) // Only rows with an email
-      .map(row => ({
-        email: (row[2] || "").trim().toLowerCase(), // Unique by email
-        pin: row[11] || "", // Keep PIN for reference if needed
-        name: `${row[0] || ""} ${row[1] || ""}`.trim(),
-        division: "FRBCAPL TEST"
-      }));
+      .map(row => {
+        const email = (row[2] || "").trim().toLowerCase();
+        return {
+          id: email, // Always set id to email
+          email,
+          pin: row[11] || "", // Keep PIN for reference if needed
+          name: `${row[0] || ""} ${row[1] || ""}`.trim(),
+          division: "FRBCAPL TEST"
+        };
+      });
 
     console.log("Mapped users:", users.length);
 

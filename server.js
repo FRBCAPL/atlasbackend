@@ -9,6 +9,7 @@ const { deleteExpiredMatchChannels } = require('./src/cleanupChannels');
 const { createMatchEvent } = require('./src/googleCalendar');
 const path = require('path');
 const Division = require('./models/Division');
+const helmet = require('helmet');
 
 // Import routes
 const apiRoutes = require('./src/routes');
@@ -16,29 +17,24 @@ const apiRoutes = require('./src/routes');
 const app = express();
 
 const allowedOrigins = [
-  'https://frbcapl.github.io',
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'https://www.frusapl.com',
-  'https://frusapl.com',
-  'https://www.frontrangepool.com',
   'https://frontrangepool.com',
-  '*' // Temporarily allow all origins for testing
+  'https://www.frontrangepool.com',
+  'http://localhost:5173',
+  'https://www.frusapl.com',
+  'https://frusapl.com'
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Temporarily allow all origins for testing
-    callback(null, true);
-    
-    // Original logic (commented out for now):
-    // if (!origin || allowedOrigins.includes(origin)) {
-    //   callback(null, true);
-    // } else {
-    //   callback(new Error('Not allowed by CORS'));
-    // }
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
   }
 }));
+
+app.use(helmet());
 
 app.use('/static', express.static(path.join(__dirname, 'public')));
 app.use(express.json());
@@ -49,9 +45,7 @@ mongoose.connect(process.env.MONGO_URI, {
   serverSelectionTimeoutMS: 5000,
 })
   .then(() => {
-    console.log("MongoDB is connected!");
-    // Log database usage after connection is established
-    setTimeout(logDatabaseUsage, 2000);
+    // Removed all console.log statements for production
   })
   .catch(err => console.error("MongoDB connection error:", err));
 
@@ -106,7 +100,7 @@ app.post('/admin/update-standings', (req, res) => {
       console.error('Standings update error:', error);
       return res.status(500).json({ error: stderr || error.message });
     }
-    console.log('Standings update output:', stdout);
+    // Removed all console.log statements for production
     res.json({ message: stdout || "All standings updated successfully!" });
   });
 });
@@ -374,10 +368,10 @@ app.patch('/admin/mark-lms-entered/:matchId', async (req, res) => {
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
-// Error handling middleware
+// Centralized error handler (should be after all other app.use and routes)
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'An unexpected error occurred. Please try again later.' });
 });
 
 // Serve division-specific standings JSON
@@ -385,8 +379,7 @@ app.get('/static/standings_:division.json', (req, res) => {
   const division = req.params.division;
   const filePath = path.join(__dirname, 'public', `standings_${division}.json`);
   
-  console.log(`📊 Standings request for division: ${division}`);
-  console.log(`📊 File path: ${filePath}`);
+  // Removed all console.log statements for production
   
   // Check if file exists
   if (!require('fs').existsSync(filePath)) {
@@ -402,14 +395,14 @@ app.get('/static/standings_:division.json', (req, res) => {
       console.error(`❌ Error sending standings file: ${err.message}`);
       res.status(500).json({ error: 'Failed to send standings file' });
     } else {
-      console.log(`✅ Standings file sent successfully: ${filePath}`);
+      // Removed all console.log statements for production
     }
   });
 });
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  // Removed all console.log statements for production
 });
 
 // Cron job for cleanup
@@ -429,23 +422,21 @@ async function logDatabaseUsage() {
       const storageLimitMB = 512;
       const usagePercentage = (storageUsedMB / storageLimitMB) * 100;
       
-      console.log('=== DATABASE USAGE ===');
-      console.log(`Storage Used: ${storageUsedMB.toFixed(2)} MB / ${storageLimitMB} MB`);
-      console.log(`Usage: ${usagePercentage.toFixed(1)}%`);
+      // Removed all console.log statements for production
       
       if (usagePercentage > 95) {
-        console.log('🚨 CRITICAL: Database storage limit nearly reached!');
+        // Removed all console.log statements for production
       } else if (usagePercentage > 80) {
-        console.log('⚠️ WARNING: Database storage limit approaching!');
+        // Removed all console.log statements for production
       } else if (usagePercentage > 60) {
-        console.log('📊 INFO: Database usage is moderate');
+        // Removed all console.log statements for production
       } else {
-        console.log('✅ Database usage is healthy');
+        // Removed all console.log statements for production
       }
-      console.log('=====================');
+      // Removed all console.log statements for production
     }
   } catch (err) {
-    console.log('Could not check database usage:', err.message);
+    // Removed all console.log statements for production
   }
 }
 

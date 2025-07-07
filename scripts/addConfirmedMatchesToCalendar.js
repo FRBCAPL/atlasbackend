@@ -5,8 +5,6 @@ const mongoose = require('mongoose');
 const path = require('path');
 
 const credentials = require('./src/service-account.json');
-console.log("Using service account:", credentials.client_email);
-console.log("Using calendar ID:", process.env.GOOGLE_CALENDAR_ID);
 const Proposal = require('./src/models/Proposal');
 const { createMatchEvent } = require('./src/googleCalendar'); 
 
@@ -24,12 +22,9 @@ async function main() {
 
   const confirmed = await Proposal.find({ status: "confirmed" }).lean();
 
-  console.log(`Found ${confirmed.length} confirmed proposals.`);
-
   for (const proposal of confirmed) {
     try {
       if (!proposal.date || !proposal.time) {
-        console.log(`Skipping proposal ${proposal._id}: missing date or time`);
         continue;
       }
       const startDateTime = new Date(`${proposal.date}T${convertTo24(proposal.time)}:00-06:00`);
@@ -43,14 +38,12 @@ async function main() {
         endDateTime: endDateTime.toISOString()
       });
 
-      console.log(`Created event for proposal ${proposal._id}: ${proposal.senderName} vs ${proposal.receiverName} on ${proposal.date} at ${proposal.time}`);
     } catch (err) {
       console.error(`Failed to create event for proposal ${proposal._id}:`, err.message);
     }
   }
 
   await mongoose.disconnect();
-  console.log("Done!");
 }
 
 main().catch(err => {

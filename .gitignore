@@ -47,3 +47,11 @@ node_modules
 # Coverage directory used by tools like
 src/service-account.json
 src/service-account3.json
+.env
+.env.local
+.env.production
+.env.development
+*.env
+node_modules/
+dist/
+build/

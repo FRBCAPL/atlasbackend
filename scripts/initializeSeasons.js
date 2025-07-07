@@ -6,9 +6,11 @@ async function initializeSeasons() {
   try {
     // Connect to MongoDB
     await mongoose.connect(process.env.MONGODB_URI);
+    console.log('Connected to MongoDB');
 
     // Clear existing seasons
     await Season.deleteMany({});
+    console.log('Cleared existing seasons');
 
     // Define seasons for each division
     const seasons = [
@@ -50,11 +52,35 @@ async function initializeSeasons() {
 
     // Insert seasons
     const createdSeasons = await Season.insertMany(seasons);
+    console.log(`Created ${createdSeasons.length} seasons:`);
+    
+    createdSeasons.forEach(season => {
+      console.log(`- ${season.name} (${season.division})`);
+      console.log(`  Phase 1: ${season.phase1Start.toDateString()} - ${season.phase1End.toDateString()}`);
+      console.log(`  Phase 2: ${season.phase2Start.toDateString()} - ${season.phase2End.toDateString()}`);
+      console.log(`  Current Week: ${season.getCurrentWeek()}`);
+      console.log(`  Current Phase: ${season.getCurrentPhase()}`);
+      console.log('');
+    });
+
+    // Test the getCurrentPhaseAndWeek method
+    console.log('Testing getCurrentPhaseAndWeek method:');
+    for (const season of createdSeasons) {
+      const result = await Season.getCurrentPhaseAndWeek(season.division);
+      console.log(`${season.division}:`);
+      console.log(`  Week: ${result.currentWeek}`);
+      console.log(`  Phase: ${result.phase}`);
+      console.log(`  Active: ${result.isActive}`);
+      console.log('');
+    }
+
+    console.log('Season initialization completed successfully!');
     
   } catch (error) {
     console.error('Error initializing seasons:', error);
   } finally {
     await mongoose.disconnect();
+    console.log('Disconnected from MongoDB');
   }
 }
 

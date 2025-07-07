@@ -395,6 +395,7 @@ class ChallengeValidationService {
   async updateStatsOnProposalConfirmed(proposal) {
     // This method will be called when a proposal is confirmed
     // For now, we'll just log it - the actual stats are updated on creation
+    console.log('Proposal confirmed:', proposal._id);
   }
 
   /**

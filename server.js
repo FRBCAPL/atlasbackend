@@ -17,20 +17,26 @@ const apiRoutes = require('./src/routes');
 const app = express();
 
 const allowedOrigins = [
-  'https://frontrangepool.com',
-  'https://www.frontrangepool.com',
+  'https://frbcapl.github.io',
   'http://localhost:5173',
+  'http://localhost:3000',
   'https://www.frusapl.com',
-  'https://frusapl.com'
+  'https://frusapl.com',
+  'https://www.frontrangepool.com',
+  'https://frontrangepool.com',
+  '*' // Temporarily allow all origins for testing
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
+    // Temporarily allow all origins for testing
+    callback(null, true);
+    // Original logic (commented out for now):
+    // if (!origin || allowedOrigins.includes(origin)) {
+    //   callback(null, true);
+    // } else {
+    //   callback(new Error('Not allowed by CORS'));
+    // }
   }
 }));
 
@@ -45,7 +51,9 @@ mongoose.connect(process.env.MONGO_URI, {
   serverSelectionTimeoutMS: 5000,
 })
   .then(() => {
-    // Removed all console.log statements for production
+    console.log("MongoDB is connected!");
+    // Log database usage after connection is established
+    setTimeout(logDatabaseUsage, 2000);
   })
   .catch(err => console.error("MongoDB connection error:", err));
 
@@ -100,7 +108,7 @@ app.post('/admin/update-standings', (req, res) => {
       console.error('Standings update error:', error);
       return res.status(500).json({ error: stderr || error.message });
     }
-    // Removed all console.log statements for production
+    console.log('Standings update output:', stdout);
     res.json({ message: stdout || "All standings updated successfully!" });
   });
 });
@@ -368,7 +376,7 @@ app.patch('/admin/mark-lms-entered/:matchId', async (req, res) => {
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
-// Centralized error handler (should be after all other app.use and routes)
+// Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'An unexpected error occurred. Please try again later.' });
@@ -379,7 +387,8 @@ app.get('/static/standings_:division.json', (req, res) => {
   const division = req.params.division;
   const filePath = path.join(__dirname, 'public', `standings_${division}.json`);
   
-  // Removed all console.log statements for production
+  console.log(`📊 Standings request for division: ${division}`);
+  console.log(`📊 File path: ${filePath}`);
   
   // Check if file exists
   if (!require('fs').existsSync(filePath)) {
@@ -395,14 +404,14 @@ app.get('/static/standings_:division.json', (req, res) => {
       console.error(`❌ Error sending standings file: ${err.message}`);
       res.status(500).json({ error: 'Failed to send standings file' });
     } else {
-      // Removed all console.log statements for production
+      console.log(`✅ Standings file sent successfully: ${filePath}`);
     }
   });
 });
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  // Removed all console.log statements for production
+  console.log(`🚀 Server running on port ${PORT}`);
 });
 
 // Cron job for cleanup
@@ -422,21 +431,23 @@ async function logDatabaseUsage() {
       const storageLimitMB = 512;
       const usagePercentage = (storageUsedMB / storageLimitMB) * 100;
       
-      // Removed all console.log statements for production
+      console.log('=== DATABASE USAGE ===');
+      console.log(`Storage Used: ${storageUsedMB.toFixed(2)} MB / ${storageLimitMB} MB`);
+      console.log(`Usage: ${usagePercentage.toFixed(1)}%`);
       
       if (usagePercentage > 95) {
-        // Removed all console.log statements for production
+        console.log('🚨 CRITICAL: Database storage limit nearly reached!');
       } else if (usagePercentage > 80) {
-        // Removed all console.log statements for production
+        console.log('⚠️ WARNING: Database storage limit approaching!');
       } else if (usagePercentage > 60) {
-        // Removed all console.log statements for production
+        console.log('📊 INFO: Database usage is moderate');
       } else {
-        // Removed all console.log statements for production
+        console.log('✅ Database usage is healthy');
       }
-      // Removed all console.log statements for production
+      console.log('=====================');
     }
   } catch (err) {
-    // Removed all console.log statements for production
+    console.log('Could not check database usage:', err.message);
   }
 }
 

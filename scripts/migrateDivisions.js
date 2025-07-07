@@ -1,4 +1,5 @@
 require('dotenv').config();
+console.log('Loaded MONGO_URI:', process.env.MONGO_URI); // <--- Debug print
 const mongoose = require('mongoose');
 const User = require('./models/User');
 const Proposal = require('./models/Proposal');
@@ -13,7 +14,7 @@ async function migrateDivisions() {
   for (const user of users) {
     const userName = `${user.name || user.id}`; // Adjust if you store full name differently
     for (const division of user.divisions) {
-      // Removed all console.log statements for production
+      console.log(`Updating proposals for user ${userName} division ${division}`);
       await Proposal.updateMany(
         {
           division: { $exists: false },
@@ -22,7 +23,7 @@ async function migrateDivisions() {
         { $set: { division } }
       );
 
-      // Removed all console.log statements for production
+      console.log(`Updating matches for user ${userName} division ${division}`);
       await Match.updateMany(
         {
           division: { $exists: false },
@@ -33,7 +34,7 @@ async function migrateDivisions() {
     }
   }
 
-  // Removed all console.log statements for production
+  console.log('Migration completed');
   mongoose.disconnect();
 }
 

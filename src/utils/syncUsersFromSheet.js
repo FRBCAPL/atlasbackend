@@ -25,7 +25,7 @@ async function syncSheetUsersToMongo() {
           email,
           pin: row[11] || "", // Keep PIN for reference if needed
           name: `${row[0] || ""} ${row[1] || ""}`.trim(),
-          division: "FRBCAPL TEST"
+          divisions: ["FRBCAPL TEST"] // Always use array for divisions
         };
       });
 

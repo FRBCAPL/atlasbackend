@@ -3,7 +3,12 @@ const proposalRoutes = require('./proposals');
 const userRoutes = require('./users');
 const matchRoutes = require('./matches');
 const noteRoutes = require('./notes');
+const challengeRoutes = require('./challenges');
 const mongoose = require('mongoose');
+
+// New seasons routes
+const seasonRoutes = require('./seasons');
+const messagesRoutes = require('./messages');
 
 const router = express.Router();
 
@@ -11,6 +16,9 @@ router.use('/proposals', proposalRoutes);
 router.use('/users', userRoutes);
 router.use('/matches', matchRoutes);
 router.use('/notes', noteRoutes);
+router.use('/challenges', challengeRoutes);
+router.use('/seasons', seasonRoutes);
+router.use('/messages', messagesRoutes);
 
 // Simple test route
 router.get('/test', (req, res) => {

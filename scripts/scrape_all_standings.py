@@ -14,16 +14,32 @@ import sys
 import re
 import os
 from pathlib import Path
+import requests
 
 # Division URLs from Dashboard.jsx
-DIVISION_URLS = {
-    "FRBCAPL TEST": "https://lms.fargorate.com/PublicReport/LeagueReports?leagueId=e05896bb-b0f4-4a80-bf99-b2ca012ceaaa&divisionId=b345a437-3415-4765-b19a-b2f7014f2cfa",
-    "Singles Test": "https://lms.fargorate.com/PublicReport/LeagueReports?leagueId=e05896bb-b0f4-4a80-bf99-b2ca012ceaaa&divisionId=9058a0cc-3231-4118-bd91-b305006fe578"
-}
+# DIVISION_URLS = {
+#     "FRBCAPL TEST": "https://lms.fargorate.com/PublicReport/LeagueReports?leagueId=e05896bb-b0f4-4a80-bf99-b2ca012ceaaa&divisionId=b345a437-3415-4765-b19a-b2f7014f2cfa",
+#     "Singles Test": "https://lms.fargorate.com/PublicReport/LeagueReports?leagueId=e05896bb-b0f4-4a80-bf99-b2ca012ceaaa&divisionId=9058a0cc-3231-4118-bd91-b305006fe578"
+# }
+
+BACKEND_API = "http://localhost:8080/api/seasons"
 
 def safe_filename(division_name):
     """Convert division name to safe filename"""
     return re.sub(r'[^A-Za-z0-9]', '_', division_name)
+
+def fetch_divisions():
+    resp = requests.get(BACKEND_API)
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get('success'):
+        raise Exception('Failed to fetch divisions from backend')
+    # Return list of (division_name, standings_url)
+    return [
+        (s['division'], s['standingsUrl'])
+        for s in data['seasons']
+        if s.get('standingsUrl')
+    ]
 
 def scrape_standings_for_division(division_name, url, output_dir):
     """Scrape standings for a specific division"""
@@ -107,8 +123,10 @@ def main():
     successful = 0
     failed = 0
     
+    # Fetch divisions dynamically
+    divisions = dict(fetch_divisions())
     # Scrape each division
-    for division_name, url in DIVISION_URLS.items():
+    for division_name, url in divisions.items():
         print(f"Processing division {division_name}...")
         if scrape_standings_for_division(division_name, url, output_dir):
             successful += 1

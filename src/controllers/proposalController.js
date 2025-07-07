@@ -1,5 +1,6 @@
 const Proposal = require('../models/Proposal');
 const CanceledProposal = require('../models/CanceledProposal');
+const challengeValidationService = require('../services/challengeValidationService');
 
 exports.getByReceiver = async (req, res) => {
   try {
@@ -34,8 +35,57 @@ exports.create = async (req, res) => {
     const data = { ...req.body };
     if (!data.counterProposal) data.counterProposal = {};
     data.counterProposal.completed = false;
+    
+    // Challenge phase validation
+    if (data.phase === 'challenge') {
+      console.log('Validating challenge phase proposal...');
+      
+      // Set challenge-specific fields
+      data.challengeType = 'challenger';
+      data.challengeWeek = challengeValidationService.getCurrentChallengeWeek();
+      data.isRematch = data.isRematch || false;
+      data.originalChallengeId = data.originalChallengeId || null;
+      
+      // Validate the challenge
+      const validation = await challengeValidationService.validateChallenge(
+        data.senderName,
+        data.receiverName,
+        data.divisions[0], // Assuming single division for now
+        data.isRematch,
+        data.originalChallengeId
+      );
+      
+      // Store validation results
+      data.challengeValidation = {
+        isValid: validation.isValid,
+        errors: validation.errors,
+        warnings: validation.warnings
+      };
+      
+      // If validation failed, return error
+      if (!validation.isValid) {
+        return res.status(400).json({
+          error: 'Challenge validation failed',
+          validation: validation
+        });
+      }
+      
+      // If there are warnings, log them but allow the proposal
+      if (validation.warnings.length > 0) {
+        console.log('Challenge warnings:', validation.warnings);
+      }
+      
+      console.log('Challenge validation passed');
+    }
+    
     const proposal = new Proposal(data);
     await proposal.save();
+    
+    // Update challenge statistics if this is a challenge phase proposal
+    if (data.phase === 'challenge') {
+      await challengeValidationService.updateStatsOnProposalCreated(proposal);
+    }
+    
     res.status(201).json({ success: true, proposalId: proposal._id });
   } catch (err) {
     console.error('Error creating proposal:', err);
@@ -47,11 +97,56 @@ exports.updateStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status, note } = req.body;
+    const proposal = await Proposal.findById(id);
+    if (!proposal) {
+      console.log('[updateStatus] Proposal not found for id:', id);
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
     
-    await Proposal.findByIdAndUpdate(id, { status, note });
+    // Challenge phase validation for defense acceptance
+    if (proposal.phase === 'challenge' && status === 'confirmed') {
+      console.log('Validating challenge phase defense acceptance...');
+      
+      const validation = await challengeValidationService.validateDefenseAcceptance(
+        proposal.receiverName,
+        proposal.senderName,
+        proposal.divisions[0]
+      );
+      
+      // Store validation results
+      proposal.challengeValidation = {
+        isValid: validation.isValid,
+        errors: validation.errors,
+        warnings: validation.warnings
+      };
+      
+      // If validation failed, return error
+      if (!validation.isValid) {
+        return res.status(400).json({
+          error: 'Defense validation failed',
+          validation: validation
+        });
+      }
+      
+      // If there are warnings, log them but allow the acceptance
+      if (validation.warnings.length > 0) {
+        console.log('Defense warnings:', validation.warnings);
+      }
+      
+      console.log('Defense validation passed');
+    }
+    
+    proposal.status = status;
+    proposal.note = note;
+    if (status === "confirmed") {
+      proposal.completed = false;
+      console.log('[updateStatus] Setting completed=false for proposal:', proposal._id);
+    }
+    await proposal.save();
+    console.log('[updateStatus] Proposal after save:', proposal);
     res.json({ success: true });
   } catch (err) {
-    console.error('Error updating proposal status:', err);
+    console.error('[updateStatus] Error updating proposal:', err);
     res.status(500).json({ error: 'Failed to update proposal' });
   }
 };
@@ -60,10 +155,12 @@ exports.counter = async (req, res) => {
   try {
     const { id } = req.params;
     const counterData = req.body;
-    
-    await Proposal.findByIdAndUpdate(id, { 
+    await Proposal.findByIdAndUpdate(id, {
       counterProposal: counterData,
-      status: 'countered'
+      status: 'countered',
+      isCounter: true,
+      counteredBy: counterData.senderName || counterData.senderEmail || '',
+      counteredAt: new Date()
     });
     res.json({ success: true });
   } catch (err) {
@@ -131,6 +228,12 @@ exports.cancel = async (req, res) => {
     if (proposal.status !== 'pending') {
       return res.status(400).json({ error: 'Only pending proposals can be canceled' });
     }
+    
+    // Update challenge statistics if this is a challenge phase proposal
+    if (proposal.phase === 'challenge') {
+      await challengeValidationService.updateStatsOnProposalCanceled(proposal);
+    }
+    
     // Set status to canceled
     proposal.status = 'canceled';
     await proposal.save();

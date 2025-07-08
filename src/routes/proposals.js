@@ -1,5 +1,5 @@
 import express from 'express';
-import proposalController from '../controllers/proposalController.js';
+import * as proposalController from '../controllers/proposalController.js';
 
 const router = express.Router();
 

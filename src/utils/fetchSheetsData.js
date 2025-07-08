@@ -8,7 +8,7 @@ const API_KEY = import.meta.env.VITE_GOOGLE_SHEETS_API_KEY;
  * @param {string} range - The range to fetch, e.g. "Sheet1!A1:D10"
  * @returns {Promise<Array>} - Array of rows (arrays of cell values)
  */
-export default async function fetchSheetData(sheetID, range) {
+export async function fetchSheetsData(sheetID, range) {
   if (!API_KEY) throw new Error("Google Sheets API key is missing.");
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetID}/values/${encodeURIComponent(
     range

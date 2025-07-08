@@ -1,4 +1,4 @@
-const axios = require('axios');
+import axios from 'axios';
 
 // Use your actual API key here or load from .env
 const API_KEY = process.env.GOOGLE_SHEETS_API_KEY || 'AIzaSyCr05_9Bg1oZE7uJcGg48mWzOo4rLjxTQ8';
@@ -9,7 +9,7 @@ const API_KEY = process.env.GOOGLE_SHEETS_API_KEY || 'AIzaSyCr05_9Bg1oZE7uJcGg48
  * @param {string} range - The A1 notation range (e.g., "Sheet1!A1:L1000").
  * @returns {Promise<Array>} - Array of rows (arrays of cell values).
  */
-async function fetchSheetData(sheetID, range) {
+export async function fetchSheetData(sheetID, range) {
   try {
     console.log('Fetching sheet data...');
     console.log('API Key available:', !!API_KEY);
@@ -40,5 +40,3 @@ async function fetchSheetData(sheetID, range) {
     }
   }
 }
-
-module.exports = fetchSheetData;

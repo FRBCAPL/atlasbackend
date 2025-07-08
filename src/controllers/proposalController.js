@@ -1,8 +1,8 @@
-const Proposal = require('../models/Proposal');
-const CanceledProposal = require('../models/CanceledProposal');
-const challengeValidationService = require('../services/challengeValidationService');
+import Proposal from '../models/Proposal.js';
+import CanceledProposal from '../models/CanceledProposal.js';
+import challengeValidationService from '../services/challengeValidationService.js';
 
-exports.getByReceiver = async (req, res) => {
+export const getByReceiver = async (req, res) => {
   try {
     const { receiverName, division } = req.query;
     const filter = { receiverName };
@@ -16,7 +16,7 @@ exports.getByReceiver = async (req, res) => {
   }
 };
 
-exports.getBySender = async (req, res) => {
+export const getBySender = async (req, res) => {
   try {
     const { senderName, division } = req.query;
     const filter = { senderName };
@@ -30,7 +30,7 @@ exports.getBySender = async (req, res) => {
   }
 };
 
-exports.create = async (req, res) => {
+export const create = async (req, res) => {
   try {
     const data = { ...req.body };
     if (!data.counterProposal) data.counterProposal = {};
@@ -93,7 +93,7 @@ exports.create = async (req, res) => {
   }
 };
 
-exports.updateStatus = async (req, res) => {
+export const updateStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status, note } = req.body;
@@ -151,7 +151,7 @@ exports.updateStatus = async (req, res) => {
   }
 };
 
-exports.counter = async (req, res) => {
+export const counter = async (req, res) => {
   try {
     const { id } = req.params;
     const counterData = req.body;
@@ -169,7 +169,7 @@ exports.counter = async (req, res) => {
   }
 };
 
-exports.update = async (req, res) => {
+export const update = async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -208,7 +208,7 @@ exports.update = async (req, res) => {
   }
 };
 
-exports.debugList = async (req, res) => {
+export const debugList = async (req, res) => {
   try {
     const proposals = await Proposal.find({}, { _id: 1, senderName: 1, receiverName: 1 });
     res.json(proposals);
@@ -217,7 +217,7 @@ exports.debugList = async (req, res) => {
   }
 };
 
-exports.cancel = async (req, res) => {
+export const cancel = async (req, res) => {
   try {
     const { id } = req.params;
     // Find the proposal

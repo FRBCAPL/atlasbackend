@@ -1,11 +1,11 @@
-const challengeValidationService = require('../services/challengeValidationService');
-const ChallengeStats = require('../models/ChallengeStats');
-const Proposal = require('../models/Proposal');
+import challengeValidationService from '../services/challengeValidationService.js';
+import ChallengeStats from '../models/ChallengeStats.js';
+import Proposal from '../models/Proposal.js';
 
 /**
  * Validate a challenge proposal
  */
-exports.validateChallenge = async (req, res) => {
+export const validateChallenge = async (req, res) => {
   try {
     const { senderName, receiverName, division, isRematch, originalChallengeId } = req.body;
     
@@ -34,7 +34,7 @@ exports.validateChallenge = async (req, res) => {
 /**
  * Get challenge statistics for a player
  */
-exports.getChallengeStats = async (req, res) => {
+export const getChallengeStats = async (req, res) => {
   try {
     const { playerName, division } = req.params;
     
@@ -91,7 +91,7 @@ exports.getChallengeStats = async (req, res) => {
 /**
  * Get eligible opponents for a player
  */
-exports.getEligibleOpponents = async (req, res) => {
+export const getEligibleOpponents = async (req, res) => {
   try {
     const { playerName, division } = req.params;
     
@@ -119,7 +119,7 @@ exports.getEligibleOpponents = async (req, res) => {
 /**
  * Get challenge limits and usage for a player
  */
-exports.getChallengeLimits = async (req, res) => {
+export const getChallengeLimits = async (req, res) => {
   try {
     const { playerName, division } = req.params;
     
@@ -180,7 +180,7 @@ exports.getChallengeLimits = async (req, res) => {
 /**
  * Get all challenge statistics for a division (admin use)
  */
-exports.getDivisionChallengeStats = async (req, res) => {
+export const getDivisionChallengeStats = async (req, res) => {
   try {
     const { division } = req.params;
     
@@ -232,7 +232,7 @@ exports.getDivisionChallengeStats = async (req, res) => {
 /**
  * Update challenge statistics manually (admin use)
  */
-exports.updateChallengeStats = async (req, res) => {
+export const updateChallengeStats = async (req, res) => {
   try {
     const { playerName, division } = req.params;
     const updateData = req.body;
@@ -287,7 +287,7 @@ exports.updateChallengeStats = async (req, res) => {
 /**
  * Reset challenge statistics for a division (admin use)
  */
-exports.resetDivisionChallengeStats = async (req, res) => {
+export const resetDivisionChallengeStats = async (req, res) => {
   try {
     const { division } = req.params;
     
@@ -315,7 +315,7 @@ exports.resetDivisionChallengeStats = async (req, res) => {
 /**
  * Get current phase and week information for a division
  */
-exports.getCurrentPhaseAndWeek = async (req, res) => {
+export const getCurrentPhaseAndWeek = async (req, res) => {
   try {
     const { division } = req.params;
     

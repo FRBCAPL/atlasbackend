@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
@@ -8,4 +8,4 @@ const userSchema = new mongoose.Schema({
 });
 
 // Prevents OverwriteModelError:
-module.exports = mongoose.models.User || mongoose.model('User', userSchema, 'users');
+export default mongoose.models.User || mongoose.model('User', userSchema, 'users');

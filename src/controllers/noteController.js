@@ -1,6 +1,6 @@
-const Note = require('../models/Note');
+import Note from '../models/Note.js';
 
-exports.getAll = async (req, res) => {
+export const getAll = async (req, res) => {
   try {
     const notes = await Note.find().sort({ createdAt: -1 }).lean();
     res.json(notes);
@@ -10,7 +10,7 @@ exports.getAll = async (req, res) => {
   }
 };
 
-exports.create = async (req, res) => {
+export const create = async (req, res) => {
   try {
     if (!req.body.text || !req.body.text.trim()) {
       return res.status(400).json({ error: 'Note text required' });
@@ -24,7 +24,7 @@ exports.create = async (req, res) => {
   }
 };
 
-exports.delete = async (req, res) => {
+export const deleteNote = async (req, res) => {
   try {
     await Note.findByIdAndDelete(req.params.id);
     res.status(204).end();

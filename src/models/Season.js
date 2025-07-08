@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const seasonSchema = new mongoose.Schema({
   name: { type: String, required: true }, // e.g., "Summer 2025"
@@ -122,4 +122,4 @@ seasonSchema.statics.getCurrentPhaseAndWeek = async function(division) {
   };
 };
 
-module.exports = mongoose.model('Season', seasonSchema); 
+export default mongoose.model('Season', seasonSchema); 

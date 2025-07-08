@@ -1,9 +1,9 @@
-const Proposal = require('../models/Proposal');
-const Match = require('../models/Match');
-const fs = require('fs');
-const path = require('path');
+import Proposal from '../models/Proposal.js';
+import Match from '../models/Match.js';
+import fs from 'fs';
+import path from 'path';
 
-exports.getAllMatches = async (req, res) => {
+export const getAllMatches = async (req, res) => {
   const { player, division, phase } = req.query;
   console.log('getAllMatches called with:', { player, division, phase }); // Debug log
   if (!player) return res.status(400).json({ error: 'Missing player' });
@@ -85,7 +85,7 @@ exports.getAllMatches = async (req, res) => {
   }
 };
 
-exports.getCompletedMatches = async (req, res) => {
+export const getCompletedMatches = async (req, res) => {
   const { player, division } = req.query;
   console.log('getCompletedMatches called with:', { player, division }); // Debug log
   if (!player) return res.status(400).json({ error: 'Missing player' });
@@ -132,7 +132,7 @@ exports.getCompletedMatches = async (req, res) => {
   }
 };
 
-exports.create = async (req, res) => {
+export const create = async (req, res) => {
   try {
     const match = new Match(req.body);
     await match.save();
@@ -143,7 +143,7 @@ exports.create = async (req, res) => {
   }
 };
 
-exports.markMatchCompleted = async (req, res) => {
+export const markMatchCompleted = async (req, res) => {
   const { id } = req.params;
   if (!id) return res.status(400).json({ error: 'Missing proposal ID' });
   try {

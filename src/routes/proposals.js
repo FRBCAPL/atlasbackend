@@ -1,6 +1,7 @@
-const express = require('express');
+import express from 'express';
+import proposalController from '../controllers/proposalController.js';
+
 const router = express.Router();
-const proposalController = require('../controllers/proposalController');
 
 router.get('/by-name', proposalController.getByReceiver);
 router.get('/by-sender', proposalController.getBySender);
@@ -11,4 +12,4 @@ router.patch('/:id/counter', proposalController.counter);
 router.get('/debug-list', proposalController.debugList);
 router.post('/:id/cancel', proposalController.cancel);
 
-module.exports = router; 
+export default router; 

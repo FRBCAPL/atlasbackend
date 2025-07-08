@@ -1,5 +1,5 @@
-const express = require('express');
-const challengeController = require('../controllers/challengeController');
+import express from 'express';
+import challengeController from '../controllers/challengeController.js';
 
 const router = express.Router();
 
@@ -23,4 +23,4 @@ router.get('/phase-week/:division', challengeController.getCurrentPhaseAndWeek);
 router.put('/stats/:playerName/:division', challengeController.updateChallengeStats);
 router.delete('/division-stats/:division', challengeController.resetDivisionChallengeStats);
 
-module.exports = router; 
+export default router; 

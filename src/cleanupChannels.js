@@ -1,5 +1,7 @@
-require('dotenv').config();
-const { StreamChat } = require('stream-chat');
+import dotenv from 'dotenv';
+import { StreamChat } from 'stream-chat';
+
+dotenv.config();
 
 const apiKey = process.env.STREAM_API_KEY;
 const apiSecret = process.env.STREAM_API_SECRET;
@@ -26,7 +28,7 @@ async function deleteExpiredMatchChannels() {
   }
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   deleteExpiredMatchChannels()
     .then(() => {
       console.log("Expired channels cleanup complete.");
@@ -38,5 +40,5 @@ if (require.main === module) {
     });
 }
 
-module.exports = { deleteExpiredMatchChannels };
+export { deleteExpiredMatchChannels };
 //comment to force a push

@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const messageSchema = new mongoose.Schema({
   senderEmail: { type: String, required: true },
@@ -9,4 +9,4 @@ const messageSchema = new mongoose.Schema({
   read: { type: Boolean, default: false }
 });
 
-module.exports = mongoose.model('Message', messageSchema); 
+export default mongoose.model('Message', messageSchema); 

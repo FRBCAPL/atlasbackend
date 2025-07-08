@@ -1,7 +1,7 @@
-const User = require('../models/User');
-const syncSheetUsersToMongo = require('../utils/syncUsersFromSheet');
+import User from '../models/User.js';
+import syncSheetUsersToMongo from '../utils/syncUsersFromSheet.js';
 
-exports.getAllUsers = async (req, res) => {
+export const getAllUsers = async (req, res) => {
   try {
     const users = await User.find({}).lean();
     res.json(users);
@@ -11,7 +11,7 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
-exports.getUser = async (req, res) => {
+export const getUser = async (req, res) => {
   try {
     const idOrEmail = decodeURIComponent(req.params.idOrEmail);
     // Try to find by id or email
@@ -24,7 +24,7 @@ exports.getUser = async (req, res) => {
   }
 };
 
-exports.syncUsers = async (req, res) => {
+export const syncUsers = async (req, res) => {
   try {
     await syncSheetUsersToMongo();
     res.json({ success: true, message: 'Users synced successfully' });

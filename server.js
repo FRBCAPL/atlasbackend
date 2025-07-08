@@ -1,18 +1,25 @@
-const express = require('express');
-const cors = require('cors');
-require('dotenv').config();
-const mongoose = require('mongoose');
-const { StreamChat } = require('stream-chat');
-const cron = require('node-cron');
-const { exec } = require('child_process');
-const { deleteExpiredMatchChannels } = require('./src/cleanupChannels');
-const { createMatchEvent } = require('./src/googleCalendar');
-const path = require('path');
-const Division = require('./models/Division');
-const helmet = require('helmet');
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+import { StreamChat } from 'stream-chat';
+import cron from 'node-cron';
+import { exec } from 'child_process';
+import { deleteExpiredMatchChannels } from './src/cleanupChannels.js';
+import { createMatchEvent } from './src/googleCalendar.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import helmet from 'helmet';
+
+// ES module equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config();
 
 // Import routes
-const apiRoutes = require('./src/routes');
+import apiRoutes from './src/routes/index.js';
+import Division from './models/Division.js';
 
 const app = express();
 
@@ -183,7 +190,7 @@ app.get('/admin/search-users', async (req, res) => {
       return res.json([]);
     }
     
-    const User = require('./models/User');
+    const { default: User } = await import('./models/User.js');
     const users = await User.find({
       $or: [
         { name: { $regex: query, $options: 'i' } },

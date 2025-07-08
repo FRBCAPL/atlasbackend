@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const challengeStatsSchema = new mongoose.Schema({
   playerName: { type: String, required: true },
@@ -83,4 +83,4 @@ challengeStatsSchema.methods.canRematchOpponent = function(opponentName, origina
   return false;
 };
 
-module.exports = mongoose.model('ChallengeStats', challengeStatsSchema); 
+export default mongoose.model('ChallengeStats', challengeStatsSchema); 

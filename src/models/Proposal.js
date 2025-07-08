@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const proposalSchema = new mongoose.Schema({
   sender: String,
@@ -47,4 +47,4 @@ proposalSchema.index({ senderName: 1, phase: 1, status: 1 });
 proposalSchema.index({ receiverName: 1, phase: 1, status: 1 });
 proposalSchema.index({ phase: 1, challengeWeek: 1 }); // For weekly limit tracking
 
-module.exports = mongoose.model('Proposal', proposalSchema);
+export default mongoose.model('Proposal', proposalSchema);

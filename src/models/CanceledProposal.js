@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const canceledProposalSchema = new mongoose.Schema({
   sender: String,
@@ -27,4 +27,4 @@ const canceledProposalSchema = new mongoose.Schema({
   canceledAt: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.model('CanceledProposal', canceledProposalSchema); 
+export default mongoose.model('CanceledProposal', canceledProposalSchema); 

@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const matchSchema = new mongoose.Schema({
   opponent: String,
@@ -14,4 +14,4 @@ const matchSchema = new mongoose.Schema({
   completed: { type: Boolean, default: false }
 });
 
-module.exports = mongoose.model('Match', matchSchema);
+export default mongoose.model('Match', matchSchema);

@@ -1,14 +1,14 @@
-const express = require('express');
-const proposalRoutes = require('./proposals');
-const userRoutes = require('./users');
-const matchRoutes = require('./matches');
-const noteRoutes = require('./notes');
-const challengeRoutes = require('./challenges');
-const mongoose = require('mongoose');
+import express from 'express';
+import proposalRoutes from './proposals.js';
+import userRoutes from './users.js';
+import matchRoutes from './matches.js';
+import noteRoutes from './notes.js';
+import challengeRoutes from './challenges.js';
+import mongoose from 'mongoose';
 
 // New seasons routes
-const seasonRoutes = require('./seasons');
-const messagesRoutes = require('./messages');
+import seasonRoutes from './seasons.js';
+import messagesRoutes from './messages.js';
 
 const router = express.Router();
 
@@ -87,4 +87,4 @@ router.get('/db-usage', async (req, res) => {
   }
 });
 
-module.exports = router; 
+export default router; 

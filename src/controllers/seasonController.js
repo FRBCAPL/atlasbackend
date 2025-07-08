@@ -1,8 +1,8 @@
-const Season = require('../models/Season');
-const User = require('../models/User');
+import Season from '../models/Season.js';
+import User from '../models/User.js';
 
 // Create a new division/season
-exports.createSeason = async (req, res) => {
+export const createSeason = async (req, res) => {
   try {
     const { name, division, seasonStart, description, rules, scheduleUrl, standingsUrl } = req.body;
     if (!name || !division || !seasonStart || !scheduleUrl || !standingsUrl) {
@@ -49,7 +49,7 @@ exports.createSeason = async (req, res) => {
 };
 
 // List all divisions/seasons
-exports.listSeasons = async (req, res) => {
+export const listSeasons = async (req, res) => {
   try {
     const seasons = await Season.find().sort({ seasonStart: -1 });
     res.json({ success: true, seasons });
@@ -59,7 +59,7 @@ exports.listSeasons = async (req, res) => {
 };
 
 // Assign players to a division (by division name)
-exports.assignPlayers = async (req, res) => {
+export const assignPlayers = async (req, res) => {
   try {
     const { division } = req.params;
     const { playerIds } = req.body; // Array of user _id's
@@ -78,7 +78,7 @@ exports.assignPlayers = async (req, res) => {
 };
 
 // Remove a player from a division
-exports.removePlayer = async (req, res) => {
+export const removePlayer = async (req, res) => {
   try {
     const { division, playerId } = req.params;
     await User.updateOne(
@@ -92,7 +92,7 @@ exports.removePlayer = async (req, res) => {
 };
 
 // List players in a division
-exports.listPlayers = async (req, res) => {
+export const listPlayers = async (req, res) => {
   try {
     const { division } = req.params;
     const players = await User.find({ divisions: division });
@@ -103,7 +103,7 @@ exports.listPlayers = async (req, res) => {
 };
 
 // List all division names (for scripts)
-exports.listDivisionNames = async (req, res) => {
+export const listDivisionNames = async (req, res) => {
   try {
     const seasons = await Season.find({}, { division: 1, _id: 0 });
     const divisionNames = [...new Set(seasons.map(s => s.division))];

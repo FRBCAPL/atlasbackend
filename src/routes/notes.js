@@ -1,9 +1,10 @@
-const express = require('express');
+import express from 'express';
+import noteController from '../controllers/noteController.js';
+
 const router = express.Router();
-const noteController = require('../controllers/noteController');
 
 router.get('/', noteController.getAll);
 router.post('/', noteController.create);
-router.delete('/:id', noteController.delete);
+router.delete('/:id', noteController.deleteNote);
 
-module.exports = router; 
+export default router; 

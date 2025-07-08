@@ -1,7 +1,7 @@
-const Message = require('../models/Message');
+import Message from '../models/Message.js';
 
 // Send a message
-exports.sendMessage = async (req, res) => {
+export const sendMessage = async (req, res) => {
   try {
     const { senderEmail, receiverEmail, content, proposalId } = req.body;
     if (!senderEmail || !receiverEmail || !content) {
@@ -16,7 +16,7 @@ exports.sendMessage = async (req, res) => {
 };
 
 // Get conversation between two users (optionally filter by proposalId)
-exports.getConversation = async (req, res) => {
+export const getConversation = async (req, res) => {
   try {
     const { user1, user2, proposalId } = req.query;
     if (!user1 || !user2) {
@@ -37,7 +37,7 @@ exports.getConversation = async (req, res) => {
 };
 
 // Get unread messages for a user
-exports.getUnread = async (req, res) => {
+export const getUnread = async (req, res) => {
   try {
     const { user } = req.query;
     if (!user) return res.status(400).json({ error: 'Missing user' });
@@ -49,7 +49,7 @@ exports.getUnread = async (req, res) => {
 };
 
 // Mark a message as read
-exports.markRead = async (req, res) => {
+export const markRead = async (req, res) => {
   try {
     const { id } = req.params;
     const message = await Message.findByIdAndUpdate(id, { read: true }, { new: true });
@@ -61,7 +61,7 @@ exports.markRead = async (req, res) => {
 };
 
 // Get conversations for a user
-exports.getConversations = async (req, res) => {
+export const getConversations = async (req, res) => {
   try {
     const { user } = req.query;
     if (!user) return res.status(400).json({ error: 'Missing user' });
@@ -75,7 +75,7 @@ exports.getConversations = async (req, res) => {
     }).sort({ timestamp: -1 });
 
     // Get all users to map emails to names
-    const User = require('../models/User');
+    const { default: User } = await import('../models/User.js');
     const allUsers = await User.find({}).lean();
     const userMap = {};
     allUsers.forEach(u => {

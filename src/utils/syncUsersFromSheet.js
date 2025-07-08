@@ -1,5 +1,5 @@
-const fetchSheetData = require('./fetchSheetData');
-const User = require('../models/User');
+import fetchSheetData from './fetchSheetData.js';
+import User from '../models/User.js';
 
 const sheetID = "1tvMgMHsRwQxsR6lMNlSnztmwpK7fhZeNEyqjTqmRFRc";
 const pinSheetName = "BCAPL SIGNUP";
@@ -48,4 +48,4 @@ async function syncSheetUsersToMongo() {
   }
 }
 
-module.exports = syncSheetUsersToMongo;
+export default syncSheetUsersToMongo;

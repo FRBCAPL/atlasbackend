@@ -1,5 +1,10 @@
-const { google } = require('googleapis');
-const path = require('path');
+import { google } from 'googleapis';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ES module equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
 const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID;
@@ -26,4 +31,4 @@ async function createMatchEvent({ summary, description, location, startDateTime,
   });
 }
 
-module.exports = { createMatchEvent };
+export { createMatchEvent };

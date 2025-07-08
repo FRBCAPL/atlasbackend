@@ -1,5 +1,5 @@
-const express = require('express');
-const seasonController = require('../controllers/seasonController');
+import express from 'express';
+import seasonController from '../controllers/seasonController.js';
 
 const router = express.Router();
 
@@ -21,4 +21,4 @@ router.delete('/:division/players/:playerId', seasonController.removePlayer);
 // List players in a division
 router.get('/:division/players', seasonController.listPlayers);
 
-module.exports = router; 
+export default router; 

@@ -2,7 +2,10 @@
 // Usage: node backend/scripts/migrateDivisionsToArray.js
 // Make sure to set MONGO_URI and DB_NAME in your environment or .env file.
 
-const { MongoClient } = require('mongodb');
+import { MongoClient } from 'mongodb';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const uri = process.env.MONGO_URI;
 const dbName = process.env.DB_NAME;

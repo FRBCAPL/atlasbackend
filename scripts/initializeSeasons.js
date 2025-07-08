@@ -1,6 +1,8 @@
-const mongoose = require('mongoose');
-const Season = require('../src/models/Season');
-require('dotenv').config();
+import mongoose from 'mongoose';
+import Season from '../src/models/Season.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 async function initializeSeasons() {
   try {

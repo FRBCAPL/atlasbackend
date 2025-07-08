@@ -2,9 +2,12 @@
 // - If counterProposal.completed is true, set completed: true
 // - Otherwise, set completed: false if not already set
 
-const mongoose = require('mongoose');
-const Proposal = require('../models/Proposal');
-const connectDB = require('../database');
+import mongoose from 'mongoose';
+import Proposal from '../src/models/Proposal.js';
+import connectDB from '../database.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 async function migrateCompletedField() {
   await connectDB();

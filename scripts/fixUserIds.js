@@ -1,6 +1,8 @@
-require('dotenv').config();
-const mongoose = require('mongoose');
-const User = require('../models/User');
+import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+import User from '../src/models/User.js';
+
+dotenv.config();
 
 mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 

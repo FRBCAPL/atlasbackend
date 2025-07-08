@@ -1,8 +1,11 @@
-require('dotenv').config();
-const mongoose = require('mongoose');
+import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+
+dotenv.config();
 
 const connectDB = async () => {
-  const uri = process.env.MONGODB_URI;
+  const uri = process.env.MONGODB_URI || process.env.MONGO_URI;
+  console.log('Connecting to MongoDB:', uri); // Debug print
   if (!uri) {
     throw new Error('MONGODB_URI environment variable is not set. Please set it in your .env file.');
   }
@@ -13,4 +16,4 @@ const connectDB = async () => {
   console.log('✅ MongoDB connected successfully!');
 };
 
-module.exports = connectDB;
+export default connectDB;

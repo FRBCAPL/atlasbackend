@@ -1,7 +1,9 @@
-const mongoose = require('mongoose');
-const Season = require('../src/models/Season');
-const challengeValidationService = require('../src/services/challengeValidationService');
-require('dotenv').config();
+import mongoose from 'mongoose';
+import Season from '../src/models/Season.js';
+import challengeValidationService from '../src/services/challengeValidationService.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 async function testPhaseWeek() {
   try {

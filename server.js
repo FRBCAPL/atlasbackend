@@ -19,7 +19,7 @@ dotenv.config();
 
 // Import routes
 import apiRoutes from './src/routes/index.js';
-import Division from './models/Division.js';
+import Division from './src/models/Division.js';
 
 const app = express();
 
@@ -52,17 +52,8 @@ app.use(helmet());
 app.use('/static', express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// Database connection
-mongoose.connect(process.env.MONGO_URI, {
-  maxPoolSize: 20,
-  serverSelectionTimeoutMS: 5000,
-})
-  .then(() => {
-    console.log("MongoDB is connected!");
-    // Log database usage after connection is established
-    setTimeout(logDatabaseUsage, 2000);
-  })
-  .catch(err => console.error("MongoDB connection error:", err));
+// Remove any direct mongoose.connect(...) calls from server.js
+// Ensure all MongoDB connections are handled through database.js
 
 // Stream Chat setup
 const apiKey = process.env.STREAM_API_KEY;
@@ -207,7 +198,7 @@ app.get('/admin/search-users', async (req, res) => {
 
 app.post('/admin/convert-divisions', async (req, res) => {
   try {
-    const User = require('./models/User');
+    const User = await import('./models/User.js');
     const users = await User.find({});
     let modified = 0;
     
@@ -236,7 +227,7 @@ app.patch('/admin/user/:userId/add-division', async (req, res) => {
       return res.status(400).json({ error: 'Division is required' });
     }
     
-    const User = require('./models/User');
+    const User = await import('./models/User.js');
     const user = await User.findOne({ $or: [{ email: userId }, { id: userId }] });
     
     if (!user) {
@@ -268,7 +259,7 @@ app.patch('/admin/user/:userId/remove-division', async (req, res) => {
       return res.status(400).json({ error: 'Division is required' });
     }
     
-    const User = require('./models/User');
+    const User = await import('./models/User.js');
     const user = await User.findOne({ $or: [{ email: userId }, { id: userId }] });
     
     if (!user) {
@@ -289,8 +280,8 @@ app.patch('/admin/user/:userId/remove-division', async (req, res) => {
 
 app.post('/admin/sync-users', async (req, res) => {
   try {
-    const syncUsersFromSheet = require('./src/utils/syncUsersFromSheet');
-    await syncUsersFromSheet();
+    const syncUsersFromSheet = await import('./src/utils/syncUsersFromSheet.js');
+    await syncUsersFromSheet.default();
     res.json({ success: true, message: 'Users synced successfully' });
   } catch (err) {
     console.error('Error syncing users:', err);
@@ -345,8 +336,8 @@ app.get('/api/db-usage', async (req, res) => {
 
 app.get('/admin/unentered-matches', async (req, res) => {
   try {
-    const Match = require('./models/Match');
-    const matches = await Match.find({ 
+    const Match = await import('./models/Match.js');
+    const matches = await Match.default.find({ 
       completed: { $ne: true },
       confirmed: true 
     }).populate('player1 player2').lean();
@@ -361,9 +352,9 @@ app.get('/admin/unentered-matches', async (req, res) => {
 app.patch('/admin/mark-lms-entered/:matchId', async (req, res) => {
   try {
     const { matchId } = req.params;
-    const Match = require('./models/Match');
+    const Match = await import('./models/Match.js');
     
-    const match = await Match.findByIdAndUpdate(
+    const match = await Match.default.findByIdAndUpdate(
       matchId,
       { lmsEntered: true },
       { new: true }
@@ -458,4 +449,4 @@ async function logDatabaseUsage() {
   }
 }
 
-module.exports = app; 
+export default app; 

@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
-const challengeValidationService = require('../src/services/challengeValidationService');
+import mongoose from 'mongoose';
+import challengeValidationService from '../src/services/challengeValidationService.js';
 
 // MongoDB connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pool-league';
@@ -145,8 +145,6 @@ async function testChallengeValidation() {
 }
 
 // Run the tests
-if (require.main === module) {
-  testChallengeValidation();
-}
-
-module.exports = { testChallengeValidation }; 
+if (import.meta.url === process.argv[1] || import.meta.url === `file://${process.argv[1]}`) {
+  await testChallengeValidation();
+} 

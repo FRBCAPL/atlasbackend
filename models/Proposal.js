@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const proposalSchema = new mongoose.Schema({
   sender: String,
@@ -18,4 +18,4 @@ const proposalSchema = new mongoose.Schema({
 proposalSchema.index({ receiverName: 1, status: 1 });
 proposalSchema.index({ receiver: 1, status: 1 });
 
-module.exports = mongoose.model('Proposal', proposalSchema);
+export default mongoose.model('Proposal', proposalSchema);

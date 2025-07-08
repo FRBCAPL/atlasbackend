@@ -1,7 +1,10 @@
-const mongoose = require('mongoose');
-const ChallengeStats = require('../src/models/ChallengeStats');
-const fs = require('fs');
-const path = require('path');
+import mongoose from 'mongoose';
+import ChallengeStats from '../src/models/ChallengeStats.js';
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 // MongoDB connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pool-league';
@@ -13,7 +16,7 @@ async function initializeChallengeStats(division) {
     console.log('Connected to MongoDB');
 
     // Load standings for the division
-    const standingsPath = path.join(__dirname, '../public', `standings_${division.replace(/\s+/g, '_')}.json`);
+    const standingsPath = path.join(process.cwd(), 'public', `standings_${division.replace(/\s+/g, '_')}.json`);
     
     if (!fs.existsSync(standingsPath)) {
       console.error(`Standings file not found: ${standingsPath}`);
@@ -92,7 +95,7 @@ async function initializeChallengeStats(division) {
 }
 
 // Command line usage
-if (require.main === module) {
+if (import.meta.url === process.argv[1] || import.meta.url === `file://${process.argv[1]}`) {
   const division = process.argv[2];
   
   if (!division) {
@@ -103,6 +106,4 @@ if (require.main === module) {
 
   console.log(`Initializing challenge stats for division: ${division}`);
   initializeChallengeStats(division);
-}
-
-module.exports = { initializeChallengeStats }; 
+} 

@@ -1,6 +1,9 @@
 // Script to reset counterProposal.completed to false for all proposals
-const mongoose = require('mongoose');
-const Proposal = require('../src/models/Proposal');
+import mongoose from 'mongoose';
+import Proposal from '../src/models/Proposal.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/YOUR_DB_NAME';
 

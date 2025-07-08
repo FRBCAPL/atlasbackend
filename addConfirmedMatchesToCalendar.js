@@ -1,14 +1,16 @@
 // addConfirmedMatchesToCalendar.js
 
-require('dotenv').config();
-const mongoose = require('mongoose');
-const path = require('path');
+import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+import path from 'path';
+import credentials from './src/service-account.json' assert { type: 'json' };
+import Proposal from './src/models/Proposal.js';
+import { createMatchEvent } from './src/googleCalendar.js';
 
-const credentials = require('./src/service-account.json');
+dotenv.config();
+
 console.log("Using service account:", credentials.client_email);
 console.log("Using calendar ID:", process.env.GOOGLE_CALENDAR_ID);
-const Proposal = require('./src/models/Proposal');
-const { createMatchEvent } = require('./src/googleCalendar'); 
 
 // Helper to convert "7:00 PM" to "19:00"
 function convertTo24(timeStr) {

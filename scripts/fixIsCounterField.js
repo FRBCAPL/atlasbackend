@@ -1,13 +1,14 @@
-const mongoose = require('mongoose');
-require('dotenv').config();
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import Proposal from '../src/models/Proposal.js';
+
+dotenv.config();
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/pool-league', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
-
-const Proposal = require('../src/models/Proposal');
 
 async function fixIsCounterField() {
   try {

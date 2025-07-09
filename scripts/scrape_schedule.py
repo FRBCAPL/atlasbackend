@@ -7,7 +7,7 @@ import sys
 import re
 import requests
 
-BACKEND_API = "http://localhost:8080/api/seasons"
+BACKEND_API = "http://localhost:8080/api/seasons/divisions"
 
 DIVISION_URLS = {
     "FRBCAPL TEST": "https://lms.fargorate.com/PublicReport/LeagueReports?leagueId=e05896bb-b0f4-4a80-bf99-b2ca012ceaaa&divisionId=b345a437-3415-4765-b19a-b2f7014f2cfa",
@@ -24,12 +24,8 @@ def fetch_divisions():
     data = resp.json()
     if not data.get('success'):
         raise Exception('Failed to fetch divisions from backend')
-    # Return list of (division_name, schedule_url)
-    return [
-        (s['division'], s['scheduleUrl'])
-        for s in data['seasons']
-        if s.get('scheduleUrl')
-    ]
+    # Return list of division names
+    return data['divisions']
 
 def scrape_division(division_name, url):
     print(f"Scraping {division_name}...")
@@ -75,21 +71,24 @@ def scrape_division(division_name, url):
     return schedule
 
 def main():
-    # Usage: python scrape_schedule.py [division name]
-    divisions = dict(fetch_divisions())
-    if len(sys.argv) > 1:
+    divisions = fetch_divisions()
+    if len(sys.argv) > 2:
         division_to_scrape = sys.argv[1]
+        output_filename = sys.argv[2]
         if division_to_scrape not in divisions:
             print(f"Division '{division_to_scrape}' not found in backend.")
-            print("Available divisions:", ", ".join(divisions.keys()))
+            print("Available divisions:", ", ".join(divisions))
             sys.exit(1)
-        divisions = {division_to_scrape: divisions[division_to_scrape]}
-    for division_name, url in divisions.items():
-        matches = scrape_division(division_name, url)
-        filename = f"public/schedule_{safe_filename(division_name)}.json"
-        with open(filename, "w", encoding="utf-8") as f:
+        url = DIVISION_URLS.get(division_to_scrape)
+        if not url:
+            print(f"No URL found for division '{division_to_scrape}'.")
+            sys.exit(1)
+        matches = scrape_division(division_to_scrape, url)
+        with open(output_filename, "w", encoding="utf-8") as f:
             json.dump(matches, f, indent=2)
-        print(f"Saved {len(matches)} matches to {filename}")
+        print(f"Saved {len(matches)} matches to {output_filename}")
+    else:
+        print("Usage: python scripts/scrape_schedule.py \"DIVISION NAME\" \"OUTPUT FILE\"")
 
 if __name__ == "__main__":
     main()

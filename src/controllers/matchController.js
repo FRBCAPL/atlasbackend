@@ -145,7 +145,7 @@ export const create = async (req, res) => {
 
 export const markMatchCompleted = async (req, res) => {
   const { id } = req.params;
-  const { winner, markedBy } = req.body;
+  const { winner, markedByName, markedByEmail } = req.body;
   if (!id) return res.status(400).json({ error: 'Missing proposal ID' });
   try {
     const proposal = await Proposal.findById(id);
@@ -155,7 +155,8 @@ export const markMatchCompleted = async (req, res) => {
     proposal.completed = true;
     if (winner) {
       proposal.winner = winner;
-      proposal.winnerChangedBy = markedBy || null;
+      proposal.winnerChangedByName = markedByName || null;
+      proposal.winnerChangedByEmail = markedByEmail || null;
       proposal.winnerChangedAt = new Date();
     }
     await proposal.save();

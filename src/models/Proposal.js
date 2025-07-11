@@ -20,6 +20,8 @@ const proposalSchema = new mongoose.Schema({
   counteredBy: { type: String },
   counteredAt: { type: Date },
   winner: { type: String }, // Name or ID of the winner
+  winnerChangedBy: { type: String }, // Email or name of the user/admin who last changed the winner
+  winnerChangedAt: { type: Date }, // Timestamp of last winner change
   
   // Challenge Phase specific fields
   challengeType: { type: String, enum: ['challenger', 'defender'], default: 'challenger' },

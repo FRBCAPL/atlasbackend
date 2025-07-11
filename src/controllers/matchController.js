@@ -145,9 +145,7 @@ export const create = async (req, res) => {
 
 export const markMatchCompleted = async (req, res) => {
   const { id } = req.params;
-  console.log("PATCH /api/matches/completed/:id req.body:", req.body); // <--- Add this
-  const { winner } = req.body;
-  console.log("PATCH /api/matches/completed/:id", { id, winner });
+  const { winner, markedBy } = req.body;
   if (!id) return res.status(400).json({ error: 'Missing proposal ID' });
   try {
     const proposal = await Proposal.findById(id);
@@ -155,9 +153,12 @@ export const markMatchCompleted = async (req, res) => {
       return res.status(404).json({ error: 'Proposal not found' });
     }
     proposal.completed = true;
-    if (winner) proposal.winner = winner; // Save winner if provided
+    if (winner) {
+      proposal.winner = winner;
+      proposal.winnerChangedBy = markedBy || null;
+      proposal.winnerChangedAt = new Date();
+    }
     await proposal.save();
-    console.log("Proposal after save:", proposal);
     res.json({ success: true, proposal });
   } catch (err) {
     console.error("Error in markMatchCompleted:", err);

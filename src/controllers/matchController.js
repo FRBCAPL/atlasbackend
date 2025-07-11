@@ -145,26 +145,22 @@ export const create = async (req, res) => {
 
 export const markMatchCompleted = async (req, res) => {
   const { id } = req.params;
+  console.log("PATCH /api/matches/completed/:id req.body:", req.body); // <--- Add this
+  const { winner } = req.body;
+  console.log("PATCH /api/matches/completed/:id", { id, winner });
   if (!id) return res.status(400).json({ error: 'Missing proposal ID' });
   try {
-    console.log('[markMatchCompleted] Marking proposal as completed, id:', id);
-    // Fetch the proposal first
     const proposal = await Proposal.findById(id);
     if (!proposal) {
-      console.log('[markMatchCompleted] Proposal not found for id:', id);
       return res.status(404).json({ error: 'Proposal not found' });
     }
-    
-    console.log('[markMatchCompleted] Found proposal:', proposal._id, 'current completed:', proposal.completed);
-    
-    // Set top-level completed to true when marking as completed
     proposal.completed = true;
+    if (winner) proposal.winner = winner; // Save winner if provided
     await proposal.save();
-    
-    console.log('[markMatchCompleted] Proposal marked as completed. New completed value:', proposal.completed);
+    console.log("Proposal after save:", proposal);
     res.json({ success: true, proposal });
   } catch (err) {
-    console.error('[markMatchCompleted] Error marking match as completed:', err);
+    console.error("Error in markMatchCompleted:", err);
     res.status(500).json({ error: 'Failed to mark match as completed' });
   }
 }; 

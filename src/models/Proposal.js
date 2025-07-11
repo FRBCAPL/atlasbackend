@@ -19,6 +19,7 @@ const proposalSchema = new mongoose.Schema({
   isCounter: { type: Boolean, default: false },
   counteredBy: { type: String },
   counteredAt: { type: Date },
+  winner: { type: String }, // Name or ID of the winner
   
   // Challenge Phase specific fields
   challengeType: { type: String, enum: ['challenger', 'defender'], default: 'challenger' },

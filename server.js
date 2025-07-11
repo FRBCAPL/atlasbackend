@@ -11,6 +11,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import helmet from 'helmet';
 import connectDB from './database.js';
+import fs from 'fs';
 
 // ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -393,7 +394,7 @@ async function startServer() {
     console.log(`📊 File path: ${filePath}`);
     
     // Check if file exists
-    if (!require('fs').existsSync(filePath)) {
+    if (!fs.existsSync(filePath)) {
       console.error(`❌ Standings file not found: ${filePath}`);
       return res.status(404).json({ 
         error: `Standings file not found for division: ${division}`,

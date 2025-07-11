@@ -153,12 +153,12 @@ export const markMatchCompleted = async (req, res) => {
       return res.status(404).json({ error: 'Proposal not found' });
     }
     proposal.completed = true;
-    if (winner) {
+    if (typeof winner !== 'undefined') {
       proposal.winner = winner;
-      proposal.winnerChangedByName = markedByName || null;
-      proposal.winnerChangedByEmail = markedByEmail || null;
-      proposal.winnerChangedAt = new Date();
     }
+    proposal.winnerChangedByName = markedByName || null;
+    proposal.winnerChangedByEmail = markedByEmail || null;
+    proposal.winnerChangedAt = new Date();
     await proposal.save();
     res.json({ success: true, proposal });
   } catch (err) {

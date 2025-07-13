@@ -28,28 +28,30 @@ async function startServer() {
 
   const app = express();
 
-  const allowedOrigins = [
-    'https://frbcapl.github.io',
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'https://www.frusapl.com',
-    'https://frusapl.com',
-    'https://www.frontrangepool.com',
-    'https://frontrangepool.com',
-    '*' // Temporarily allow all origins for testing
-  ];
+  // CORS setup
+  const allowedOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',')
+    : [
+        'https://frbcapl.github.io',
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'https://www.frusapl.com',
+        'https://frusapl.com',
+        'https://www.frontrangepool.com',
+        'https://frontrangepool.com'
+      ];
 
   app.use(cors({
     origin: function (origin, callback) {
-      // Temporarily allow all origins for testing
-      callback(null, true);
-      // Original logic (commented out for now):
-      // if (!origin || allowedOrigins.includes(origin)) {
-      //   callback(null, true);
-      // } else {
-      //   callback(new Error('Not allowed by CORS'));
-      // }
-    }
+      // allow requests with no origin (like mobile apps, curl, etc.)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true
   }));
 
   app.use(helmet());

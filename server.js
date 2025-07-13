@@ -56,6 +56,7 @@ async function startServer() {
 
   app.use(helmet());
 
+  console.log('Serving static files from:', path.join(__dirname, 'public'));
   app.use('/static', express.static(path.join(__dirname, 'public')));
   app.use(express.json());
 
@@ -410,6 +411,20 @@ async function startServer() {
         res.status(500).json({ error: 'Failed to send standings file' });
       } else {
         console.log(`✅ Standings file sent successfully: ${filePath}`);
+      }
+    });
+  });
+
+  // Debug route to check static file existence
+  app.get('/debug-static', (req, res) => {
+    const fs = require('fs');
+    const path = require('path');
+    const filePath = path.join(__dirname, 'public', 'schedule_FRBCAPL_TEST.json');
+    fs.access(filePath, fs.constants.F_OK, (err) => {
+      if (err) {
+        res.status(404).send('File not found: ' + filePath);
+      } else {
+        res.send('File exists: ' + filePath);
       }
     });
   });

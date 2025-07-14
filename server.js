@@ -23,27 +23,21 @@ dotenv.config();
 import apiRoutes from './src/routes/index.js';
 import Division from './src/models/Division.js';
 
+const allowedOrigins = [
+  'https://frusapl.com',
+  'https://www.frontrangepool.com',
+  'http://localhost:5173', // for local dev
+];
+
 async function startServer() {
   await connectDB();
 
   const app = express();
 
-  // CORS setup
-  const allowedOrigins = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',')
-    : [
-        'https://frbcapl.github.io',
-        'http://localhost:5173',
-        'http://localhost:3000',
-        'https://www.frusapl.com',
-        'https://frusapl.com',
-        'https://www.frontrangepool.com',
-        'https://frontrangepool.com'
-      ];
-
+  // CORS setup (TEMPORARY: allow all origins for local development)
   app.use(cors({
     origin: function (origin, callback) {
-      // allow requests with no origin (like mobile apps, curl, etc.)
+      // Allow requests with no origin (like mobile apps, curl, etc.)
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
@@ -51,7 +45,7 @@ async function startServer() {
         return callback(new Error('Not allowed by CORS'));
       }
     },
-    credentials: true
+    credentials: true,
   }));
 
   app.use(helmet());

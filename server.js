@@ -429,6 +429,10 @@ async function startServer() {
     });
   });
 
+  app.get('/test-alive', (req, res) => {
+    res.send('Backend is alive and running the latest code!');
+  });
+
   const PORT = process.env.PORT || 8080;
   app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);

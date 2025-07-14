@@ -26,7 +26,12 @@ import Division from './src/models/Division.js';
 const allowedOrigins = [
   'https://frusapl.com',
   'https://www.frontrangepool.com',
-  'http://localhost:5173', // for local dev
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://frbcapl.github.io',
+  'https://frbcapl.github.io/NEWAPP',
 ];
 
 async function startServer() {
@@ -34,7 +39,7 @@ async function startServer() {
 
   const app = express();
 
-  // CORS setup (TEMPORARY: allow all origins for local development)
+  // CORS setup (allow dev and production frontend origins)
   app.use(cors({
     origin: function (origin, callback) {
       // Allow requests with no origin (like mobile apps, curl, etc.)

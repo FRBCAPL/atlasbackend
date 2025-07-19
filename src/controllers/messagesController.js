@@ -62,6 +62,7 @@ export const markRead = async (req, res) => {
 
 // Get conversations for a user
 export const getConversations = async (req, res) => {
+  console.log('getConversations called for user:', req.query.user);
   try {
     const { user } = req.query;
     if (!user) return res.status(400).json({ error: 'Missing user' });
@@ -79,21 +80,21 @@ export const getConversations = async (req, res) => {
     const allUsers = await User.find({}).lean();
     const userMap = {};
     allUsers.forEach(u => {
-      userMap[u.email] = u;
+      if (u.email) userMap[u.email.toLowerCase()] = u;
     });
+    console.log('userMap:', Object.keys(userMap).map(e => `[${e}]`));
 
     // Group messages by conversation partner
     const conversations = {};
     messages.forEach(message => {
       const otherUser = message.senderEmail === user ? message.receiverEmail : message.senderEmail;
-      
+      console.log('otherUser:', `[${otherUser}]`);
       if (!conversations[otherUser]) {
-        const userInfo = userMap[otherUser] || {};
+        const userInfo = userMap[otherUser.toLowerCase()] || {};
+        console.log('userInfo:', userInfo);
         conversations[otherUser] = {
           email: otherUser,
-          name: userInfo.firstName && userInfo.lastName ? 
-            `${userInfo.firstName} ${userInfo.lastName}` : 
-            otherUser,
+          name: userInfo.name ? userInfo.name : otherUser,
           lastMessage: message.content,
           lastMessageTime: message.timestamp,
           unreadCount: 0

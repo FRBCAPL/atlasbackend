@@ -174,8 +174,18 @@ class ChallengeValidationService {
         errors.push(`You already have a challenge match scheduled for week ${currentWeek}`);
       }
       
+      // NEW BYLAW: If receiver has no matches scheduled this week, they MUST accept defense challenges
       if (!receiverStats.canDefendThisWeek(currentWeek)) {
-        errors.push(`${receiverName} already has a challenge match scheduled for week ${currentWeek}`);
+        // Check if they have any matches scheduled for this week
+        const hasAnyMatchThisWeek = receiverStats.challengesByWeek.includes(currentWeek) || 
+                                   receiverStats.defendedByWeek.includes(currentWeek);
+        
+        if (hasAnyMatchThisWeek) {
+          errors.push(`${receiverName} already has a challenge match scheduled for week ${currentWeek}`);
+        } else {
+          // They have no matches scheduled - they MUST accept this defense challenge
+          warnings.push(`${receiverName} has no matches scheduled for week ${currentWeek} and MUST accept this defense challenge according to league bylaws.`);
+        }
       }
       
       // 6. Check if receiver has reached total match limit
@@ -241,9 +251,18 @@ class ChallengeValidationService {
         warnings.push(`You have already defended ${defenderStats.requiredDefenses} challenges. This would be a voluntary defense.`);
       }
       
-      // 3. Check weekly limits
+      // 3. Check weekly limits - NEW BYLAW ENFORCEMENT
       if (!defenderStats.canDefendThisWeek(currentWeek)) {
-        errors.push(`You already have a challenge match scheduled for week ${currentWeek}`);
+        // Check if they have any matches scheduled for this week
+        const hasAnyMatchThisWeek = defenderStats.challengesByWeek.includes(currentWeek) || 
+                                   defenderStats.defendedByWeek.includes(currentWeek);
+        
+        if (hasAnyMatchThisWeek) {
+          errors.push(`You already have a challenge match scheduled for week ${currentWeek}`);
+        } else {
+          // They have no matches scheduled - they MUST accept this defense challenge
+          warnings.push(`You have no matches scheduled for week ${currentWeek}. According to league bylaws, you MUST accept this defense challenge.`);
+        }
       }
       
       if (!challengerStats.canChallengeThisWeek(currentWeek)) {
@@ -324,11 +343,19 @@ class ChallengeValidationService {
           continue;
         }
         
+        // NEW BYLAW: Check if opponent must defend (no matches scheduled this week)
+        const currentWeek = this.getCurrentChallengeWeek();
+        const hasAnyMatchThisWeek = opponentStats.challengesByWeek.includes(currentWeek) || 
+                                   opponentStats.defendedByWeek.includes(currentWeek);
+        const mustDefend = !hasAnyMatchThisWeek;
+        
         eligibleOpponents.push({
           name: opponentName,
           position: opponentPosition,
           positionDifference: Math.abs(positionDifference),
-          stats: opponentStats
+          stats: opponentStats,
+          mustDefend: mustDefend,
+          canDefendThisWeek: opponentStats.canDefendThisWeek(currentWeek)
         });
       }
       

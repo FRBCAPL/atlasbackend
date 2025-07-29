@@ -32,6 +32,33 @@ export const validateChallenge = async (req, res) => {
 };
 
 /**
+ * Validate defense acceptance for a challenge
+ */
+export const validateDefenseAcceptance = async (req, res) => {
+  try {
+    const { defenderName, challengerName, division } = req.body;
+    
+    if (!defenderName || !challengerName || !division) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: defenderName, challengerName, division' 
+      });
+    }
+    
+    const validation = await challengeValidationService.validateDefenseAcceptance(
+      defenderName, 
+      challengerName, 
+      division
+    );
+    
+    res.json(validation);
+    
+  } catch (error) {
+    console.error('Error validating defense acceptance:', error);
+    res.status(500).json({ error: 'Failed to validate defense acceptance' });
+  }
+};
+
+/**
  * Get challenge statistics for a player
  */
 export const getChallengeStats = async (req, res) => {

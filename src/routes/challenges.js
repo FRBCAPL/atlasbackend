@@ -5,6 +5,7 @@ const router = express.Router();
 
 // Challenge validation
 router.post('/validate', challengeController.validateChallenge);
+router.post('/validate-defense', challengeController.validateDefenseAcceptance);
 
 // Challenge statistics
 router.get('/stats/:playerName/:division', challengeController.getChallengeStats);

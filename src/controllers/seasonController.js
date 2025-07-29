@@ -154,4 +154,59 @@ export const getSeasonsByDivision = async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
+};
+
+// Auto-update season phases based on current date
+export const updateSeasonPhases = async (req, res) => {
+  try {
+    const { division } = req.params;
+    
+    // Get current season for the division
+    const season = await Season.getCurrentSeason(division);
+    if (!season) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'No current season found for this division' 
+      });
+    }
+
+    const now = new Date();
+    let phaseChanged = false;
+    let newPhase = season.getCurrentPhase();
+
+    // Check if phase needs to be updated
+    if (now >= season.phase2Start && season.getCurrentPhase() === 'scheduled') {
+      newPhase = 'challenge';
+      phaseChanged = true;
+    } else if (now > season.phase2End && season.getCurrentPhase() === 'challenge') {
+      newPhase = 'completed';
+      phaseChanged = true;
+    }
+
+    // Update season if phase changed
+    if (phaseChanged) {
+      // You could add additional logic here for phase transitions
+      console.log(`Phase automatically updated for ${division}: ${newPhase}`);
+    }
+
+    res.json({ 
+      success: true, 
+      currentPhase: newPhase,
+      phaseChanged,
+      season: {
+        name: season.name,
+        seasonStart: season.seasonStart,
+        seasonEnd: season.seasonEnd,
+        phase1Start: season.phase1Start,
+        phase1End: season.phase1End,
+        phase2Start: season.phase2Start,
+        phase2End: season.phase2End,
+        totalWeeks: season.totalWeeks,
+        phase1Weeks: season.phase1Weeks,
+        phase2Weeks: season.phase2Weeks
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 }; 

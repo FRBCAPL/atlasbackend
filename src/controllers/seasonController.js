@@ -111,4 +111,47 @@ export const listDivisionNames = async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
+};
+
+// Get current season for a division
+export const getCurrentSeason = async (req, res) => {
+  try {
+    const { division } = req.params;
+    const season = await Season.getCurrentSeason(division);
+    
+    if (!season) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'No current season found for this division' 
+      });
+    }
+    
+    res.json({ success: true, season });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Get current phase and week for a division
+export const getCurrentPhaseAndWeek = async (req, res) => {
+  try {
+    const { division } = req.params;
+    const result = await Season.getCurrentPhaseAndWeek(division);
+    
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Get all seasons for a division
+export const getSeasonsByDivision = async (req, res) => {
+  try {
+    const { division } = req.params;
+    const seasons = await Season.find({ division }).sort({ seasonStart: -1 });
+    
+    res.json({ success: true, seasons });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 }; 

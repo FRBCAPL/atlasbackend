@@ -32,6 +32,7 @@ const allowedOrigins = [
   'http://127.0.0.1:3000',
   'https://frbcapl.github.io',
   'https://frbcapl.github.io/NEWAPP',
+  'https://newapp-1-ic1v.onrender.com',
 ];
 
 async function startServer() {

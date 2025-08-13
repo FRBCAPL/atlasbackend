@@ -123,18 +123,18 @@ async function startServer() {
             ? { id: newUserId, name: "Admin", role: "admin" }
             : { id: newUserId, name: userId };
           
-          await serverClient.upsertUser(newUser);
-          const token = serverClient.createToken(newUserId);
-          console.log('Token generated successfully for new user:', newUserId);
-          return res.json({ token });
+                     await serverClient.upsertUser(newUser);
+           const token = serverClient.createToken(newUserId);
+           console.log('Token generated successfully for new user:', newUserId);
+           return res.json({ token, userId: newUserId });
         } else {
           throw upsertError;
         }
       }
       
-      const token = serverClient.createToken(userId);
-      console.log('Token generated successfully for:', userId);
-      res.json({ token });
+             const token = serverClient.createToken(userId);
+       console.log('Token generated successfully for:', userId);
+       res.json({ token, userId: userId });
     } catch (err) {
       console.error('Error generating token:', err);
       console.error('Error details:', {

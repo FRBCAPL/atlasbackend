@@ -66,10 +66,18 @@ async function startServer() {
   // Stream Chat setup
   const apiKey = process.env.STREAM_API_KEY;
   const apiSecret = process.env.STREAM_API_SECRET;
+  
+  console.log('Stream Chat API Key available:', !!apiKey);
+  console.log('Stream Chat API Secret available:', !!apiSecret);
+  
+  if (!apiKey || !apiSecret) {
+    console.error('Stream Chat API keys are missing! Please set STREAM_API_KEY and STREAM_API_SECRET environment variables.');
+  }
+  
   const serverClient = StreamChat.getInstance(apiKey, apiSecret);
 
   // Admin emails
-  const ADMIN_EMAILS = ["admin@frusapl.com", "admin2@frusapl.com"];
+  const ADMIN_EMAILS = ["admin@frusapl.com", "admin2@frusapl.com", "frbcaplgmailcom"];
 
   function cleanId(id) {
     return id.toLowerCase().replace(/[^a-z0-9_-]/g, "");
@@ -89,15 +97,30 @@ async function startServer() {
     let { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'Missing userId' });
     userId = cleanId(userId);
+    
+    console.log('Token request for userId:', userId);
+    console.log('Admin emails:', ADMIN_EMAILS);
+    console.log('Is admin user:', isAdminUser(userId));
+    console.log('Stream Chat API Key available:', !!apiKey);
+    console.log('Stream Chat API Secret available:', !!apiSecret);
+    
     try {
       const user = isAdminUser(userId)
         ? { id: userId, name: "Admin", role: "admin" }
         : { id: userId, name: userId };
+      
+      console.log('Creating user:', user);
       await serverClient.upsertUser(user);
       const token = serverClient.createToken(userId);
+      console.log('Token generated successfully for:', userId);
       res.json({ token });
     } catch (err) {
       console.error('Error generating token:', err);
+      console.error('Error details:', {
+        name: err.name,
+        message: err.message,
+        stack: err.stack
+      });
       res.status(500).json({ error: err.message });
     }
   });

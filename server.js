@@ -92,6 +92,117 @@ async function startServer() {
     return `match-${cleanId(sortedIds[0])}-${cleanId(sortedIds[1])}`;
   }
 
+  // Helper function to ensure all channels exist and add user to them
+  async function ensureChannelsExistAndAddUser(userId) {
+    const AVAILABLE_DIVISIONS = ["FRBCAPL TEST", "Singles Test"];
+    
+    // Add user to the general channel (assume it exists)
+    try {
+      const generalChannel = serverClient.channel('messaging', 'general');
+      await generalChannel.addMembers([userId]);
+      console.log('Added user to general channel:', userId);
+    } catch (channelError) {
+      console.log('Could not add user to general channel (may already exist):', channelError.message);
+    }
+    
+    // Add user to announcements channel (assume it exists)
+    try {
+      const announcementsChannel = serverClient.channel('messaging', 'announcements');
+      await announcementsChannel.addMembers([userId]);
+      console.log('Added user to announcements channel:', userId);
+    } catch (channelError) {
+      console.log('Could not add user to announcements channel (may already exist):', channelError.message);
+    }
+    
+    // Add user to division channels (assume they exist)
+    for (const division of AVAILABLE_DIVISIONS) {
+      const divisionId = division.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+      try {
+        const divisionChannel = serverClient.channel('messaging', `division-${divisionId}`);
+        await divisionChannel.addMembers([userId]);
+        console.log(`Added user to division channel ${division}:`, userId);
+      } catch (channelError) {
+        console.log(`Could not add user to division channel ${division} (may already exist):`, channelError.message);
+      }
+    }
+    
+    // Add user to game room channels (assume they exist)
+    for (let i = 1; i <= 5; i++) {
+      try {
+        const gameRoomChannel = serverClient.channel('messaging', `game-room-${i}`);
+        await gameRoomChannel.addMembers([userId]);
+        console.log(`Added user to game room ${i}:`, userId);
+      } catch (channelError) {
+        console.log(`Could not add user to game room ${i} (may already exist):`, channelError.message);
+      }
+    }
+  }
+
+  // Initialize all channels endpoint
+  app.post('/init-channels', async (req, res) => {
+    try {
+      const AVAILABLE_DIVISIONS = ["FRBCAPL TEST", "Singles Test"];
+      
+      // Create general channel
+      try {
+        const generalChannel = serverClient.channel('messaging', 'general', {
+          name: "General Chat",
+          description: "General discussion for all players"
+        });
+        await generalChannel.create();
+        console.log('Created general channel');
+      } catch (error) {
+        console.log('General channel may already exist:', error.message);
+      }
+      
+      // Create announcements channel
+      try {
+        const announcementsChannel = serverClient.channel('messaging', 'announcements', {
+          name: "📢 Announcements",
+          description: "Important announcements and updates"
+        });
+        await announcementsChannel.create();
+        console.log('Created announcements channel');
+      } catch (error) {
+        console.log('Announcements channel may already exist:', error.message);
+      }
+      
+      // Create division channels
+      for (const division of AVAILABLE_DIVISIONS) {
+        const divisionId = division.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+        try {
+          const divisionChannel = serverClient.channel('messaging', `division-${divisionId}`, {
+            name: `🏆 ${division}`,
+            description: `Discussion for ${division} players`
+          });
+          await divisionChannel.create();
+          console.log(`Created division channel: ${division}`);
+        } catch (error) {
+          console.log(`Division channel ${division} may already exist:`, error.message);
+        }
+      }
+      
+      // Create game room channels
+      for (let i = 1; i <= 5; i++) {
+        try {
+          const gameRoomChannel = serverClient.channel('messaging', `game-room-${i}`, {
+            name: `🎮 Game Room ${i}`,
+            description: `Multiplayer game room ${i} - for future online play`
+          });
+          await gameRoomChannel.create();
+          console.log(`Created game room ${i}`);
+        } catch (error) {
+          console.log(`Game room ${i} may already exist:`, error.message);
+        }
+      }
+      
+      res.json({ success: true, message: 'All channels initialized' });
+    } catch (error) {
+      console.error('Error initializing channels:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Stream Chat token endpoint
   app.post('/token', async (req, res) => {
     let { userId } = req.body;
@@ -114,6 +225,10 @@ async function startServer() {
       // Try to upsert user, but handle deleted user case
       try {
         await serverClient.upsertUser(user);
+        
+        // Ensure all channels exist and add user to them
+        await ensureChannelsExistAndAddUser(userId);
+        
       } catch (upsertError) {
         // If user was deleted, try to create a new user with a different ID
         if (upsertError.message && upsertError.message.includes('was deleted')) {
@@ -123,16 +238,10 @@ async function startServer() {
             ? { id: newUserId, name: "Admin", role: "admin" }
             : { id: newUserId, name: userId };
           
-                     await serverClient.upsertUser(newUser);
-           
-           // Add the new user to the general channel
-           try {
-             const generalChannel = serverClient.channel('messaging', 'general');
-             await generalChannel.addMembers([newUserId]);
-             console.log('Added new user to general channel:', newUserId);
-           } catch (channelError) {
-             console.log('Could not add user to general channel (may already exist):', channelError.message);
-           }
+                                           await serverClient.upsertUser(newUser);
+            
+             // Ensure all channels exist and add the new user to them
+             await ensureChannelsExistAndAddUser(newUserId);
            
            const token = serverClient.createToken(newUserId);
            console.log('Token generated successfully for new user:', newUserId);

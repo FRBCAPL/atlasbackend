@@ -110,7 +110,28 @@ async function startServer() {
         : { id: userId, name: userId };
       
       console.log('Creating user:', user);
-      await serverClient.upsertUser(user);
+      
+      // Try to upsert user, but handle deleted user case
+      try {
+        await serverClient.upsertUser(user);
+      } catch (upsertError) {
+        // If user was deleted, try to create a new user with a different ID
+        if (upsertError.message && upsertError.message.includes('was deleted')) {
+          console.log('User was deleted, creating new user with timestamp suffix');
+          const newUserId = `${userId}_${Date.now()}`;
+          const newUser = isAdminUser(userId)
+            ? { id: newUserId, name: "Admin", role: "admin" }
+            : { id: newUserId, name: userId };
+          
+          await serverClient.upsertUser(newUser);
+          const token = serverClient.createToken(newUserId);
+          console.log('Token generated successfully for new user:', newUserId);
+          return res.json({ token });
+        } else {
+          throw upsertError;
+        }
+      }
+      
       const token = serverClient.createToken(userId);
       console.log('Token generated successfully for:', userId);
       res.json({ token });

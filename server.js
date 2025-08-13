@@ -124,6 +124,16 @@ async function startServer() {
             : { id: newUserId, name: userId };
           
                      await serverClient.upsertUser(newUser);
+           
+           // Add the new user to the general channel
+           try {
+             const generalChannel = serverClient.channel('messaging', 'general');
+             await generalChannel.addMembers([newUserId]);
+             console.log('Added new user to general channel:', newUserId);
+           } catch (channelError) {
+             console.log('Could not add user to general channel (may already exist):', channelError.message);
+           }
+           
            const token = serverClient.createToken(newUserId);
            console.log('Token generated successfully for new user:', newUserId);
            return res.json({ token, userId: newUserId });

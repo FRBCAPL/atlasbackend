@@ -33,6 +33,10 @@ const allowedOrigins = [
   'https://frbcapl.github.io',
   'https://frbcapl.github.io/NEWAPP',
   'https://newapp-1-ic1v.onrender.com',
+  'https://frontrangepool.com',
+  'http://frontrangepool.com',
+  'https://www.frontrangepool.com',
+  'http://www.frontrangepool.com',
 ];
 
 async function startServer() {
@@ -301,17 +305,62 @@ async function startServer() {
     }
   });
 
-  app.post('/admin/update-schedule', (req, res) => {
+  app.post('/admin/update-schedule', async (req, res) => {
     const division = req.body.division;
     const safeDivision = division ? division.replace(/[^A-Za-z0-9]/g, '_') : 'default';
     const filename = `public/schedule_${safeDivision}.json`;
     let cmd = `python scripts/scrape_schedule.py "${division}" "${filename}"`;
-    exec(cmd, (error, stdout, stderr) => {
-      if (error) {
-        return res.status(500).json({ error: stderr || error.message });
+    
+    try {
+      // First, update the schedule
+      await new Promise((resolve, reject) => {
+        exec(cmd, (error, stdout, stderr) => {
+          if (error) {
+            reject(new Error(stderr || error.message));
+          } else {
+            resolve(stdout || "Schedule updated successfully!");
+          }
+        });
+      });
+
+      // Then, check if Phase 2 deadline needs to be extended
+      try {
+        const { default: Season } = await import('./src/models/Season.js');
+        const season = await Season.getCurrentSeason(division);
+        
+        if (season) {
+          const now = new Date();
+          const phase2End = new Date(season.phase2End);
+          
+          // If Phase 2 deadline has passed, extend it by 4 weeks (28 days)
+          if (now > phase2End) {
+            const newPhase2End = new Date(now);
+            newPhase2End.setDate(newPhase2End.getDate() + 28); // Extend by 4 weeks
+            
+            season.phase2End = newPhase2End;
+            season.seasonEnd = newPhase2End; // Season ends when Phase 2 ends
+            await season.save();
+            
+            console.log(`Automatically extended Phase 2 deadline for ${division} to ${newPhase2End.toISOString()}`);
+            
+            res.json({ 
+              message: `Schedule updated successfully! Phase 2 deadline automatically extended to ${newPhase2End.toLocaleDateString()}.`,
+              deadlineExtended: true,
+              newDeadline: newPhase2End.toISOString()
+            });
+          } else {
+            res.json({ message: "Schedule updated successfully!" });
+          }
+        } else {
+          res.json({ message: "Schedule updated successfully!" });
+        }
+      } catch (seasonError) {
+        console.error('Error checking/updating season dates:', seasonError);
+        res.json({ message: "Schedule updated successfully!" });
       }
-      res.json({ message: stdout || "Schedule updated successfully!" });
-    });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   app.get('/admin/divisions', async (req, res) => {

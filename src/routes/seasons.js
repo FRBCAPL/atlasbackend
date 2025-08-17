@@ -24,6 +24,9 @@ router.get('/:division', seasonController.getSeasonsByDivision);
 // Auto-update season phases
 router.post('/update-phases/:division', seasonController.updateSeasonPhases);
 
+// Update season dates (specifically Phase 2 end date)
+router.patch('/update-dates/:division', seasonController.updateSeasonDates);
+
 // Assign players to a division
 router.post('/:division/players', seasonController.assignPlayers);
 

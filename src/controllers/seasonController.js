@@ -209,4 +209,51 @@ export const updateSeasonPhases = async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
+};
+
+// Update season dates (specifically Phase 2 end date)
+export const updateSeasonDates = async (req, res) => {
+  try {
+    const { division } = req.params;
+    const { phase2End } = req.body;
+    
+    // Get current season for the division
+    const season = await Season.getCurrentSeason(division);
+    if (!season) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'No current season found for this division' 
+      });
+    }
+
+    // Validate the new Phase 2 end date
+    const newPhase2End = new Date(phase2End);
+    if (isNaN(newPhase2End.getTime())) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid Phase 2 end date' 
+      });
+    }
+
+    // Update only the specific fields without triggering full validation
+    await Season.updateOne(
+      { _id: season._id },
+      { 
+        $set: {
+          phase2End: newPhase2End,
+          seasonEnd: newPhase2End // Season ends when Phase 2 ends
+        }
+      }
+    );
+
+    console.log(`Updated Phase 2 end date for ${division} to ${newPhase2End.toISOString()}`);
+
+    res.json({ 
+      success: true, 
+      message: `Phase 2 end date updated to ${newPhase2End.toLocaleDateString()}`,
+      newDeadline: newPhase2End.toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 }; 

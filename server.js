@@ -363,6 +363,100 @@ async function startServer() {
     }
   });
 
+  app.post('/admin/update-season-data', async (req, res) => {
+    console.log('=== UPDATE SEASON DATA ENDPOINT CALLED ===');
+    console.log('Request body:', req.body);
+    
+    const division = req.body.division;
+    console.log('Division:', division);
+    
+    const safeDivision = division ? division.replace(/[^A-Za-z0-9]/g, '_') : 'default';
+    const filename = `public/schedule_${safeDivision}.json`;
+    console.log('Filename:', filename);
+    
+    try {
+      // Read the schedule JSON file
+      const schedulePath = path.join(__dirname, filename);
+      console.log('Schedule path:', schedulePath);
+      
+      if (!fs.existsSync(schedulePath)) {
+        console.log('Schedule file not found!');
+        return res.status(404).json({ error: `Schedule file not found for division: ${division}` });
+      }
+      
+      console.log('Schedule file exists, reading...');
+      const scheduleData = JSON.parse(fs.readFileSync(schedulePath, 'utf8'));
+      console.log('Schedule data loaded, length:', scheduleData.length);
+      
+      // Find the last match date (Phase 1 end date)
+      let lastMatchDate = null;
+      if (scheduleData && scheduleData.length > 0) {
+        // Sort matches by date and get the last one
+        const sortedMatches = scheduleData.sort((a, b) => new Date(a.date) - new Date(b.date));
+        console.log('Sorted matches, last match:', sortedMatches[sortedMatches.length - 1]);
+        lastMatchDate = new Date(sortedMatches[sortedMatches.length - 1].date);
+        console.log('Last match date:', lastMatchDate);
+      }
+      
+      if (!lastMatchDate) {
+        console.log('No valid match dates found!');
+        return res.status(400).json({ error: 'No valid match dates found in schedule' });
+      }
+      
+      // Calculate Phase 2 end date (4 weeks after Phase 1 ends)
+      const phase2EndDate = new Date(lastMatchDate);
+      phase2EndDate.setDate(phase2EndDate.getDate() + 28); // 4 weeks = 28 days
+      console.log('Phase 2 end date:', phase2EndDate);
+      
+      // Update the season data in the database
+      console.log('Importing Season model...');
+      const { default: Season } = await import('./src/models/Season.js');
+      console.log('Season model imported successfully');
+      
+      console.log('Getting current season...');
+      const season = await Season.getCurrentSeason(division);
+      console.log('Season found:', season ? 'Yes' : 'No');
+      
+      if (!season) {
+        console.log('No current season found!');
+        return res.status(404).json({ error: `No current season found for division: ${division}` });
+      }
+      
+             // Update the season dates
+       console.log('Updating season dates...');
+       season.phase1End = lastMatchDate;
+       season.phase2End = phase2EndDate;
+       season.seasonEnd = phase2EndDate; // Season ends when Phase 2 ends
+       
+       // Ensure required fields are preserved
+       if (!season.standingsUrl) {
+         season.standingsUrl = `https://frusapl.com/standings/${division.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+       }
+       if (!season.scheduleUrl) {
+         season.scheduleUrl = `https://frusapl.com/schedule/${division.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+       }
+       
+       await season.save();
+      console.log('Season saved successfully');
+      
+      console.log(`Updated season data for ${division}:`);
+      console.log(`  Phase 1 end: ${lastMatchDate.toISOString()}`);
+      console.log(`  Phase 2 end: ${phase2EndDate.toISOString()}`);
+      
+      res.json({ 
+        message: `Season data updated successfully! Phase 1 ends: ${lastMatchDate.toLocaleDateString()}, Phase 2 ends: ${phase2EndDate.toLocaleDateString()}`,
+        phase1End: lastMatchDate.toISOString(),
+        phase2End: phase2EndDate.toISOString()
+      });
+      
+    } catch (error) {
+      console.error('=== ERROR IN UPDATE SEASON DATA ===');
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.get('/admin/divisions', async (req, res) => {
     try {
       const divisions = await Division.find({}, { _id: 0, name: 1, description: 1 }).lean();

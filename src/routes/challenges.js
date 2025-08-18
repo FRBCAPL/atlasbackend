@@ -22,6 +22,7 @@ router.get('/phase-week/:division', challengeController.getCurrentPhaseAndWeek);
 
 // Manual updates (admin use)
 router.put('/stats/:playerName/:division', challengeController.updateChallengeStats);
+router.delete('/stats/:playerName/:division', challengeController.resetPlayerChallengeStats);
 router.delete('/division-stats/:division', challengeController.resetDivisionChallengeStats);
 
 export default router; 

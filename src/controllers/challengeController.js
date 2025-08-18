@@ -104,6 +104,7 @@ export const getChallengeStats = async (req, res) => {
       challengedOpponents: stats.challengedOpponents,
       challengesByWeek: stats.challengesByWeek,
       defendedByWeek: stats.defendedByWeek,
+      timesChallenged: stats.timesChallenged,
       lastUpdated: stats.updatedAt
     };
     
@@ -159,6 +160,9 @@ export const getChallengeLimits = async (req, res) => {
     const stats = await challengeValidationService.getOrCreateChallengeStats(playerName, division);
     const currentWeek = challengeValidationService.getCurrentChallengeWeek();
     
+    // Get the challenge limit breakdown
+    const breakdown = stats.getChallengeLimitBreakdown();
+    
     const response = {
       playerName: stats.playerName,
       division: stats.division,
@@ -175,7 +179,8 @@ export const getChallengeLimits = async (req, res) => {
         matchesAsDefender: stats.matchesAsDefender,
         requiredDefenses: stats.requiredDefenses,
         voluntaryDefenses: stats.voluntaryDefenses,
-        totalDefenses: stats.totalDefenses
+        totalDefenses: stats.totalDefenses,
+        timesChallenged: stats.timesChallenged
       },
       remaining: {
         challenges: stats.remainingChallenges,
@@ -193,6 +198,14 @@ export const getChallengeLimits = async (req, res) => {
         hasReachedDefenseLimit: stats.hasReachedDefenseLimit,
         isEligibleForChallenges: stats.isEligibleForChallenges,
         isEligibleForDefense: stats.isEligibleForDefense
+      },
+      // NEW: Dynamic challenge limit breakdown
+      dynamicLimits: {
+        timesChallenged: breakdown.timesChallenged,
+        baseChallengesAllowed: breakdown.baseChallengesAllowed,
+        challengesIssued: breakdown.challengesIssued,
+        remainingChallenges: breakdown.remainingChallenges,
+        explanation: breakdown.explanation
       }
     };
     
@@ -281,7 +294,11 @@ export const updateChallengeStats = async (req, res) => {
       hasReachedChallengeLimit: updateData.hasReachedChallengeLimit,
       hasReachedDefenseLimit: updateData.hasReachedDefenseLimit,
       isEligibleForChallenges: updateData.isEligibleForChallenges,
-      isEligibleForDefense: updateData.isEligibleForDefense
+      isEligibleForDefense: updateData.isEligibleForDefense,
+      timesChallenged: updateData.timesChallenged,
+      challengedOpponents: updateData.challengedOpponents,
+      challengesByWeek: updateData.challengesByWeek,
+      defendedByWeek: updateData.defendedByWeek
     };
     
     // Remove undefined values
@@ -336,6 +353,40 @@ export const resetDivisionChallengeStats = async (req, res) => {
   } catch (error) {
     console.error('Error resetting division challenge stats:', error);
     res.status(500).json({ error: 'Failed to reset division challenge statistics' });
+  }
+};
+
+/**
+ * Reset challenge statistics for a specific player (admin use)
+ */
+export const resetPlayerChallengeStats = async (req, res) => {
+  try {
+    const { playerName, division } = req.params;
+    
+    if (!playerName || !division) {
+      return res.status(400).json({ 
+        error: 'Missing required parameters: playerName, division' 
+      });
+    }
+    
+    // Delete challenge stats for the specific player
+    const result = await ChallengeStats.findOneAndDelete({ playerName, division });
+    
+    if (!result) {
+      return res.status(404).json({ 
+        error: 'Challenge stats not found for this player' 
+      });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Reset challenge statistics for player: ${playerName}`,
+      deletedStats: result 
+    });
+    
+  } catch (error) {
+    console.error('Error resetting player challenge stats:', error);
+    res.status(500).json({ error: 'Failed to reset player challenge statistics' });
   }
 }; 
 

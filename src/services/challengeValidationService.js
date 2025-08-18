@@ -141,9 +141,10 @@ class ChallengeValidationService {
       const senderStats = await this.getOrCreateChallengeStats(senderName, division);
       const receiverStats = await this.getOrCreateChallengeStats(receiverName, division);
       
-      // 1. Check if sender has reached challenge limit
-      if (senderStats.totalChallengeMatches >= 4) {
-        errors.push(`You have already played ${senderStats.totalChallengeMatches} challenge matches (maximum is 4)`);
+      // 1. Check if sender has reached dynamic challenge limit
+      if (senderStats.remainingChallenges <= 0) {
+        const breakdown = senderStats.getChallengeLimitBreakdown();
+        errors.push(`You have reached your challenge limit. ${breakdown.explanation}`);
       }
       
       // 2. Check if receiver has reached defense limit
@@ -188,9 +189,10 @@ class ChallengeValidationService {
         }
       }
       
-      // 6. Check if receiver has reached total match limit
-      if (receiverStats.totalChallengeMatches >= 4) {
-        errors.push(`${receiverName} has already played ${receiverStats.totalChallengeMatches} challenge matches (maximum is 4)`);
+      // 6. Check if receiver has reached total match limit (challenges + defenses)
+      const receiverTotalMatches = receiverStats.totalChallengeMatches + receiverStats.requiredDefenses;
+      if (receiverTotalMatches >= 4) {
+        errors.push(`${receiverName} has already played ${receiverTotalMatches} total matches (${receiverStats.totalChallengeMatches} challenges + ${receiverStats.requiredDefenses} defenses, maximum is 4)`);
       }
       
       // 7. Rematch-specific validations
@@ -241,9 +243,10 @@ class ChallengeValidationService {
       const defenderStats = await this.getOrCreateChallengeStats(defenderName, division);
       const challengerStats = await this.getOrCreateChallengeStats(challengerName, division);
       
-      // 1. Check if defender has reached total match limit
-      if (defenderStats.totalChallengeMatches >= 4) {
-        errors.push(`You have already played ${defenderStats.totalChallengeMatches} challenge matches (maximum is 4)`);
+      // 1. Check if defender has reached total match limit (challenges + defenses)
+      const defenderTotalMatches = defenderStats.totalChallengeMatches + defenderStats.requiredDefenses;
+      if (defenderTotalMatches >= 4) {
+        errors.push(`You have already played ${defenderTotalMatches} total matches (${defenderStats.totalChallengeMatches} challenges + ${defenderStats.requiredDefenses} defenses, maximum is 4)`);
       }
       
       // 2. Check if defender has reached defense limit
@@ -269,9 +272,10 @@ class ChallengeValidationService {
         errors.push(`${challengerName} already has a challenge match scheduled for week ${currentWeek}`);
       }
       
-      // 4. Check if challenger has reached challenge limit
-      if (challengerStats.totalChallengeMatches >= 4) {
-        errors.push(`${challengerName} has already played ${challengerStats.totalChallengeMatches} challenge matches (maximum is 4)`);
+      // 4. Check if challenger has reached total match limit (challenges + defenses)
+      const challengerTotalMatches = challengerStats.totalChallengeMatches + challengerStats.requiredDefenses;
+      if (challengerTotalMatches >= 4) {
+        errors.push(`${challengerName} has already played ${challengerTotalMatches} total matches (${challengerStats.totalChallengeMatches} challenges + ${challengerStats.requiredDefenses} defenses, maximum is 4)`);
       }
       
       return {
@@ -338,8 +342,9 @@ class ChallengeValidationService {
           continue;
         }
         
-        // Check if opponent has reached total match limit
-        if (opponentStats.totalChallengeMatches >= 4) {
+        // Check if opponent has reached total match limit (challenges + defenses)
+        const opponentTotalMatches = opponentStats.totalChallengeMatches + opponentStats.requiredDefenses;
+        if (opponentTotalMatches >= 4) {
           continue;
         }
         
@@ -385,7 +390,8 @@ class ChallengeValidationService {
       senderStats.challengedOpponents.push(proposal.receiverName);
       senderStats.lastChallengeWeek = currentWeek;
       
-      if (senderStats.totalChallengeMatches >= 4) {
+      const senderTotalMatches = senderStats.totalChallengeMatches + senderStats.requiredDefenses;
+      if (senderTotalMatches >= 4) {
         senderStats.hasReachedChallengeLimit = true;
         senderStats.isEligibleForChallenges = false;
       }
@@ -398,6 +404,9 @@ class ChallengeValidationService {
       receiverStats.totalChallengeMatches += 1;
       receiverStats.defendedByWeek.push(currentWeek);
       
+      // NEW: Increment times challenged for the receiver
+      receiverStats.timesChallenged += 1;
+      
       // Determine if this is a required or voluntary defense
       if (receiverStats.requiredDefenses < 2) {
         receiverStats.requiredDefenses += 1;
@@ -409,7 +418,8 @@ class ChallengeValidationService {
         receiverStats.hasReachedDefenseLimit = true;
       }
       
-      if (receiverStats.totalChallengeMatches >= 4) {
+      const receiverTotalMatches = receiverStats.totalChallengeMatches + receiverStats.requiredDefenses;
+      if (receiverTotalMatches >= 4) {
         receiverStats.isEligibleForChallenges = false;
         receiverStats.isEligibleForDefense = false;
       }
@@ -444,7 +454,8 @@ class ChallengeValidationService {
       senderStats.challengesByWeek = senderStats.challengesByWeek.filter(w => w !== currentWeek);
       senderStats.challengedOpponents = senderStats.challengedOpponents.filter(name => name !== proposal.receiverName);
       
-      if (senderStats.totalChallengeMatches < 4) {
+      const senderTotalMatches = senderStats.totalChallengeMatches + senderStats.requiredDefenses;
+      if (senderTotalMatches < 4) {
         senderStats.hasReachedChallengeLimit = false;
         senderStats.isEligibleForChallenges = true;
       }
@@ -457,6 +468,9 @@ class ChallengeValidationService {
       receiverStats.totalChallengeMatches = Math.max(0, receiverStats.totalChallengeMatches - 1);
       receiverStats.defendedByWeek = receiverStats.defendedByWeek.filter(w => w !== currentWeek);
       
+      // NEW: Decrement times challenged for the receiver
+      receiverStats.timesChallenged = Math.max(0, receiverStats.timesChallenged - 1);
+      
       // Revert defense counts
       if (receiverStats.voluntaryDefenses > 0) {
         receiverStats.voluntaryDefenses = Math.max(0, receiverStats.voluntaryDefenses - 1);
@@ -468,7 +482,8 @@ class ChallengeValidationService {
         receiverStats.hasReachedDefenseLimit = false;
       }
       
-      if (receiverStats.totalChallengeMatches < 4) {
+      const receiverTotalMatches = receiverStats.totalChallengeMatches + receiverStats.requiredDefenses;
+      if (receiverTotalMatches < 4) {
         receiverStats.isEligibleForChallenges = true;
         receiverStats.isEligibleForDefense = true;
       }

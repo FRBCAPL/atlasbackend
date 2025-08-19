@@ -25,4 +25,9 @@ router.put('/stats/:playerName/:division', challengeController.updateChallengeSt
 router.delete('/stats/:playerName/:division', challengeController.resetPlayerChallengeStats);
 router.delete('/division-stats/:division', challengeController.resetDivisionChallengeStats);
 
+// NEW: Match result reporting and rematch functionality
+router.post('/report-result', challengeController.reportMatchResult);
+router.get('/rematch-eligibility/:playerName/:division', challengeController.getRematchEligibility);
+router.post('/validate-rematch', challengeController.validateRematch);
+
 export default router; 

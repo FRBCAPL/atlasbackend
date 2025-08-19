@@ -27,6 +27,9 @@ router.post('/update-phases/:division', seasonController.updateSeasonPhases);
 // Update season dates (specifically Phase 2 end date)
 router.patch('/update-dates/:division', seasonController.updateSeasonDates);
 
+// Admin function to activate Phase 2 for testing
+router.post('/activate-phase2/:division', seasonController.activatePhase2ForTesting);
+
 // Assign players to a division
 router.post('/:division/players', seasonController.assignPlayers);
 

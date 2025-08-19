@@ -246,3 +246,81 @@ export const cancel = async (req, res) => {
     res.status(500).json({ error: 'Failed to cancel proposal' });
   }
 }; 
+
+// --- Admin utilities ---
+export const adminList = async (req, res) => {
+  try {
+    const { division, status, completed, phase, limit } = req.query;
+    const filter = {};
+    if (division) {
+      filter.divisions = { $elemMatch: { $regex: `^${division}$`, $options: 'i' } };
+    }
+    if (status) {
+      filter.status = status;
+    }
+    if (typeof completed !== 'undefined') {
+      if (completed === 'true' || completed === true) filter.completed = true;
+      if (completed === 'false' || completed === false) filter.completed = false;
+    }
+    if (phase) {
+      filter.phase = phase;
+    }
+
+    const max = Math.min(parseInt(limit || '500', 10) || 500, 2000);
+    const results = await Proposal.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(max)
+      .lean();
+    res.json({ success: true, count: results.length, proposals: results });
+  } catch (err) {
+    console.error('Error in adminList:', err);
+    res.status(500).json({ error: 'Failed to list proposals' });
+  }
+};
+
+export const adminSetCompleted = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { completed, winner } = req.body;
+    const proposal = await Proposal.findById(id);
+    if (!proposal) {
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
+
+    const isCompleted = completed === true || completed === 'true';
+    proposal.completed = isCompleted;
+    if (isCompleted) {
+      if (typeof winner !== 'undefined') {
+        proposal.winner = winner || null;
+      }
+      proposal.winnerChangedAt = new Date();
+    } else {
+      // Clearing completion-related fields when un-completing
+      proposal.winner = null;
+      proposal.validated = false;
+      proposal.validationData = null;
+      proposal.rejectionData = null;
+      proposal.winnerChangedAt = new Date();
+    }
+
+    await proposal.save();
+    res.json({ success: true, proposal });
+  } catch (err) {
+    console.error('Error in adminSetCompleted:', err);
+    res.status(500).json({ error: 'Failed to update completion status' });
+  }
+};
+
+export const remove = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await Proposal.findByIdAndDelete(id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting proposal:', err);
+    res.status(500).json({ error: 'Failed to delete proposal' });
+  }
+};

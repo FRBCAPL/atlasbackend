@@ -256,4 +256,45 @@ export const updateSeasonDates = async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
+};
+
+// Admin function to activate Phase 2 for testing
+export const activatePhase2ForTesting = async (req, res) => {
+  try {
+    const { division } = req.params;
+    
+    // Get current season for the division
+    const season = await Season.getCurrentSeason(division);
+    if (!season) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'No current season found for this division' 
+      });
+    }
+
+    const now = new Date();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    // Update Phase 1 end date to yesterday to activate Phase 2
+    await Season.updateOne(
+      { _id: season._id },
+      { 
+        $set: {
+          phase1End: yesterday
+        }
+      }
+    );
+
+    console.log(`Activated Phase 2 for testing in ${division} by setting Phase 1 end to ${yesterday.toISOString()}`);
+
+    res.json({ 
+      success: true, 
+      message: `Phase 2 activated for testing in ${division}`,
+      phase1End: yesterday.toISOString(),
+      currentDate: now.toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 }; 

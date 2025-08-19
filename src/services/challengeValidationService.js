@@ -31,7 +31,12 @@ class ChallengeValidationService {
     }
 
     try {
+      // Add debug logging to see what division is being requested
+      console.log(`Loading standings for division: "${division}"`);
+      
       const standingsPath = path.join(__dirname, '../../public', `standings_${division.replace(/\s+/g, '_')}.json`);
+      console.log(`Standings file path: ${standingsPath}`);
+      
       const standingsData = JSON.parse(fs.readFileSync(standingsPath, 'utf8'));
       
       // Cache the standings
@@ -40,7 +45,8 @@ class ChallengeValidationService {
       
       return standingsData;
     } catch (error) {
-      console.error(`Error loading standings for division ${division}:`, error);
+      console.error(`Error loading standings for division "${division}":`, error);
+      console.error(`This suggests the division parameter might be incorrect. Expected: "FRBCAPL TEST", Got: "${division}"`);
       return [];
     }
   }
@@ -134,6 +140,60 @@ class ChallengeValidationService {
     const warnings = [];
     
     try {
+      // NEW: Basic validation checks
+      if (!senderName || !receiverName || !division) {
+        return {
+          isValid: false,
+          errors: ['Missing required parameters: senderName, receiverName, division'],
+          warnings: [],
+          currentWeek: this.getCurrentChallengeWeek()
+        };
+      }
+      
+      // NEW: Check if Phase 2 is active
+      const season = await Season.findOne({ division });
+      if (!season) {
+        return {
+          isValid: false,
+          errors: ['Season not found for this division'],
+          warnings: [],
+          currentWeek: this.getCurrentChallengeWeek()
+        };
+      }
+      
+      const now = new Date();
+      if (now < season.phase1End || now > season.phase2End) {
+        return {
+          isValid: false,
+          errors: ['Phase 2 is not currently active'],
+          warnings: [],
+          currentWeek: this.getCurrentChallengeWeek()
+        };
+      }
+      
+      // NEW: Validate that both players exist in standings
+      const standings = await this.loadStandings(division);
+      const senderExists = standings.some(p => p.name.toLowerCase().trim() === senderName.toLowerCase().trim());
+      const receiverExists = standings.some(p => p.name.toLowerCase().trim() === receiverName.toLowerCase().trim());
+      
+      if (!senderExists) {
+        return {
+          isValid: false,
+          errors: [`Player "${senderName}" not found in ${division} standings`],
+          warnings: [],
+          currentWeek: this.getCurrentChallengeWeek()
+        };
+      }
+      
+      if (!receiverExists) {
+        return {
+          isValid: false,
+          errors: [`Player "${receiverName}" not found in ${division} standings`],
+          warnings: [],
+          currentWeek: this.getCurrentChallengeWeek()
+        };
+      }
+      
       // Get current week
       const currentWeek = this.getCurrentChallengeWeek();
       
@@ -171,22 +231,21 @@ class ChallengeValidationService {
       }
       
       // 5. Check weekly limits for both players
-      if (!senderStats.canChallengeThisWeek(currentWeek)) {
+      const senderHasMatchThisWeek = senderStats.challengesByWeek.includes(currentWeek) || 
+                                    senderStats.defendedByWeek.includes(currentWeek);
+      if (senderHasMatchThisWeek) {
         errors.push(`You already have a challenge match scheduled for week ${currentWeek}`);
       }
       
-      // NEW BYLAW: If receiver has no matches scheduled this week, they MUST accept defense challenges
-      if (!receiverStats.canDefendThisWeek(currentWeek)) {
-        // Check if they have any matches scheduled for this week
-        const hasAnyMatchThisWeek = receiverStats.challengesByWeek.includes(currentWeek) || 
-                                   receiverStats.defendedByWeek.includes(currentWeek);
-        
-        if (hasAnyMatchThisWeek) {
-          errors.push(`${receiverName} already has a challenge match scheduled for week ${currentWeek}`);
-        } else {
-          // They have no matches scheduled - they MUST accept this defense challenge
-          warnings.push(`${receiverName} has no matches scheduled for week ${currentWeek} and MUST accept this defense challenge according to league bylaws.`);
-        }
+      // Check if receiver has matches scheduled this week
+      const receiverHasMatchThisWeek = receiverStats.challengesByWeek.includes(currentWeek) || 
+                                      receiverStats.defendedByWeek.includes(currentWeek);
+      
+      if (receiverHasMatchThisWeek) {
+        errors.push(`${receiverName} already has a challenge match scheduled for week ${currentWeek}`);
+      } else {
+        // They have no matches scheduled - they MUST accept this defense challenge
+        warnings.push(`${receiverName} has no matches scheduled for week ${currentWeek} and MUST accept this defense challenge according to league bylaws.`);
       }
       
       // 6. Check if receiver has reached total match limit (challenges + defenses)
@@ -199,11 +258,36 @@ class ChallengeValidationService {
       if (isRematch) {
         if (!originalChallengeId) {
           errors.push('Rematch challenges require the original challenge ID');
+        } else {
+          // NEW: Enhanced rematch validation with match result tracking
+          try {
+            const Proposal = (await import('../models/Proposal.js')).default;
+            const originalChallenge = await Proposal.findById(originalChallengeId);
+            
+            if (!originalChallenge) {
+              errors.push('Original challenge not found');
+            } else if (!originalChallenge.matchResult || !originalChallenge.matchResult.completed) {
+              errors.push('Original challenge must be completed before requesting a rematch');
+            } else {
+              // Check if the sender (defender in original match) lost the original match
+              const wasDefenderInOriginal = originalChallenge.receiverName === senderName;
+              const originalWinner = originalChallenge.matchResult.winner;
+              const originalLoser = originalChallenge.matchResult.loser;
+              
+              if (wasDefenderInOriginal && originalLoser === senderName) {
+                // Defender lost original match - eligible for rematch
+                if (!senderStats.canRematchOpponent(receiverName, originalChallengeId)) {
+                  errors.push('You are not eligible for a rematch against this opponent');
+                }
+              } else {
+                errors.push('Only the defender who lost the original match can request a rematch');
+              }
+            }
+          } catch (error) {
+            console.error('Error validating rematch:', error);
+            errors.push('Error validating rematch eligibility');
+          }
         }
-        
-        // Check if sender lost the original match (this would need to be implemented when match results are tracked)
-        // For now, we'll allow rematches but add a warning
-        warnings.push('Rematch validation requires match result tracking - please verify eligibility manually');
       }
       
       // 8. Check if receiver is eligible for defense
@@ -331,6 +415,7 @@ class ChallengeValidationService {
         // Check if already challenged (unless rematch eligible)
         if (playerStats.challengedOpponents.includes(opponentName)) {
           // TODO: Check rematch eligibility when match results are tracked
+          // For now, skip players already challenged
           continue;
         }
         

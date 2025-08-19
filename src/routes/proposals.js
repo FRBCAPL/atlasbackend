@@ -12,4 +12,9 @@ router.patch('/:id/counter', proposalController.counter);
 router.get('/debug-list', proposalController.debugList);
 router.post('/:id/cancel', proposalController.cancel);
 
+// Admin routes
+router.get('/admin/list', proposalController.adminList);
+router.patch('/admin/:id/completed', proposalController.adminSetCompleted);
+router.delete('/admin/:id', proposalController.remove);
+
 export default router; 

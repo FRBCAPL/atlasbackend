@@ -30,6 +30,27 @@ const proposalSchema = new mongoose.Schema({
   challengeWeek: { type: Number }, // Week number within Phase 2 (7-10)
   isRematch: { type: Boolean, default: false },
   originalChallengeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Proposal' }, // For rematches
+  
+  // NEW: Enhanced match result tracking for Phase 2
+  matchResult: {
+    completed: { type: Boolean, default: false },
+    completedAt: { type: Date },
+    winner: { type: String }, // Name of the winner
+    loser: { type: String }, // Name of the loser
+    score: { type: String }, // Optional score/result details
+    notes: { type: String }, // Any additional notes about the match
+    reportedBy: { type: String }, // Who reported the result
+    reportedAt: { type: Date }
+  },
+  
+  // NEW: Rematch tracking
+  rematchEligibility: {
+    canRematch: { type: Boolean, default: false },
+    eligibleForRematch: { type: String }, // Name of player eligible for rematch
+    reason: { type: String }, // Why rematch is/isn't eligible
+    expiresAt: { type: Date } // When rematch eligibility expires
+  },
+  
   challengeValidation: {
     isValid: { type: Boolean, default: true },
     errors: [{ type: String }],
@@ -51,5 +72,8 @@ proposalSchema.index({ receiverName: 1, status: 1 });
 proposalSchema.index({ senderName: 1, phase: 1, status: 1 });
 proposalSchema.index({ receiverName: 1, phase: 1, status: 1 });
 proposalSchema.index({ phase: 1, challengeWeek: 1 }); // For weekly limit tracking
+// NEW: Indexes for match result tracking
+proposalSchema.index({ 'matchResult.completed': 1, 'matchResult.winner': 1 });
+proposalSchema.index({ 'rematchEligibility.canRematch': 1, 'rematchEligibility.eligibleForRematch': 1 });
 
 export default mongoose.model('Proposal', proposalSchema);

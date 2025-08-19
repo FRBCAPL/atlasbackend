@@ -65,9 +65,20 @@ export const getChallengeStats = async (req, res) => {
   try {
     const { playerName, division } = req.params;
     
+    // Debug logging to see what parameters we're getting
+    console.log('getChallengeStats called with:', { playerName, division });
+    
     if (!playerName || !division) {
       return res.status(400).json({ 
         error: 'Missing required parameters: playerName, division' 
+      });
+    }
+    
+    // Validate that division is actually a division name, not a player name
+    if (division === playerName) {
+      console.error('Parameter swap detected! Division and playerName are the same:', division);
+      return res.status(400).json({ 
+        error: 'Invalid parameters: division and playerName cannot be the same' 
       });
     }
     
@@ -123,9 +134,20 @@ export const getEligibleOpponents = async (req, res) => {
   try {
     const { playerName, division } = req.params;
     
+    // Debug logging to see what parameters we're getting
+    console.log('getEligibleOpponents called with:', { playerName, division });
+    
     if (!playerName || !division) {
       return res.status(400).json({ 
         error: 'Missing required parameters: playerName, division' 
+      });
+    }
+    
+    // Validate that division is actually a division name, not a player name
+    if (division === playerName) {
+      console.error('Parameter swap detected! Division and playerName are the same:', division);
+      return res.status(400).json({ 
+        error: 'Invalid parameters: division and playerName cannot be the same' 
       });
     }
     
@@ -403,8 +425,7 @@ export const getCurrentPhaseAndWeek = async (req, res) => {
       });
     }
 
-    const challengeService = new ChallengeValidationService();
-    const result = await challengeService.getCurrentPhaseAndWeek(division);
+    const result = await challengeValidationService.getCurrentPhaseAndWeek(division);
     
     res.json({
       success: true,
@@ -416,5 +437,173 @@ export const getCurrentPhaseAndWeek = async (req, res) => {
     res.status(500).json({ 
       error: 'Failed to get current phase and week information' 
     });
+  }
+}; 
+
+/**
+ * Report match result for a challenge
+ */
+export const reportMatchResult = async (req, res) => {
+  try {
+    const { challengeId, winner, loser, score, notes, reportedBy } = req.body;
+    
+    if (!challengeId || !winner || !loser || !reportedBy) {
+      return res.status(400).json({ 
+        error: 'Missing required parameters: challengeId, winner, loser, reportedBy' 
+      });
+    }
+    
+    const Proposal = (await import('../models/Proposal.js')).default;
+    const challenge = await Proposal.findById(challengeId);
+    
+    if (!challenge) {
+      return res.status(404).json({ error: 'Challenge not found' });
+    }
+    
+    // Update match result
+    challenge.matchResult = {
+      completed: true,
+      completedAt: new Date(),
+      winner,
+      loser,
+      score: score || '',
+      notes: notes || '',
+      reportedBy,
+      reportedAt: new Date()
+    };
+    
+    // Update rematch eligibility for the loser (defender)
+    if (challenge.receiverName === loser) {
+      // Defender lost - they are eligible for rematch
+      challenge.rematchEligibility = {
+        canRematch: true,
+        eligibleForRematch: winner, // Can rematch against the winner
+        reason: 'Defender lost the original match',
+        expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) // 2 weeks
+      };
+    }
+    
+    await challenge.save();
+    
+    // Update challenge stats for both players
+    const senderStats = await ChallengeStats.findOne({ 
+      playerName: challenge.senderName, 
+      division: challenge.divisions[0] 
+    });
+    const receiverStats = await ChallengeStats.findOne({ 
+      playerName: challenge.receiverName, 
+      division: challenge.divisions[0] 
+    });
+    
+    if (senderStats) {
+      await senderStats.addMatchResult(
+        challengeId, 
+        challenge.receiverName, 
+        senderStats.playerName === winner ? 'win' : 'loss',
+        challenge.challengeWeek
+      );
+      
+      // Update rematch eligibility for sender
+      if (senderStats.playerName === loser) {
+        await senderStats.updateRematchEligibility(
+          winner,
+          challengeId,
+          true,
+          'Lost the original match as challenger'
+        );
+      }
+    }
+    
+    if (receiverStats) {
+      await receiverStats.addMatchResult(
+        challengeId, 
+        challenge.senderName, 
+        receiverStats.playerName === winner ? 'win' : 'loss',
+        challenge.challengeWeek
+      );
+      
+      // Update rematch eligibility for receiver
+      if (receiverStats.playerName === loser) {
+        await receiverStats.updateRematchEligibility(
+          winner,
+          challengeId,
+          true,
+          'Lost the original match as defender'
+        );
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Match result reported successfully',
+      challenge: challenge
+    });
+    
+  } catch (error) {
+    console.error('Error reporting match result:', error);
+    res.status(500).json({ error: 'Failed to report match result' });
+  }
+};
+
+/**
+ * Get rematch eligibility for a player
+ */
+export const getRematchEligibility = async (req, res) => {
+  try {
+    const { playerName, division } = req.params;
+    
+    if (!playerName || !division) {
+      return res.status(400).json({ 
+        error: 'Missing required parameters: playerName, division' 
+      });
+    }
+    
+    const stats = await ChallengeStats.findOne({ playerName, division });
+    
+    if (!stats) {
+      return res.status(404).json({ 
+        error: 'Challenge stats not found for this player' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      rematchEligibility: stats.rematchEligibility,
+      matchResults: stats.matchResults
+    });
+    
+  } catch (error) {
+    console.error('Error getting rematch eligibility:', error);
+    res.status(500).json({ error: 'Failed to get rematch eligibility' });
+  }
+};
+
+/**
+ * Validate rematch request
+ */
+export const validateRematch = async (req, res) => {
+  try {
+    const { senderName, receiverName, division, originalChallengeId } = req.body;
+    
+    if (!senderName || !receiverName || !division || !originalChallengeId) {
+      return res.status(400).json({ 
+        error: 'Missing required parameters: senderName, receiverName, division, originalChallengeId' 
+      });
+    }
+    
+    const challengeValidationService = (await import('../services/challengeValidationService.js')).default;
+    const validation = await challengeValidationService.validateChallenge(
+      senderName, 
+      receiverName, 
+      division, 
+      true, // isRematch
+      originalChallengeId
+    );
+    
+    res.json(validation);
+    
+  } catch (error) {
+    console.error('Error validating rematch:', error);
+    res.status(500).json({ error: 'Failed to validate rematch' });
   }
 }; 

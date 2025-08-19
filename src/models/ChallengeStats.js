@@ -24,6 +24,24 @@ const challengeStatsSchema = new mongoose.Schema({
   challengedOpponents: [{ type: String }], // Track who they've challenged
   lastChallengeWeek: { type: Number, default: 0 },
   
+  // NEW: Match result tracking for Phase 2
+  matchResults: [{
+    challengeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Proposal' },
+    opponent: { type: String },
+    result: { type: String, enum: ['win', 'loss', 'draw', 'pending'] },
+    week: { type: Number },
+    completedAt: { type: Date }
+  }],
+  
+  // NEW: Rematch tracking
+  rematchEligibility: [{
+    opponent: { type: String },
+    originalChallengeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Proposal' },
+    canRematch: { type: Boolean, default: false },
+    reason: { type: String },
+    expiresAt: { type: Date }
+  }],
+  
   // Current standings position (for eligibility calculations)
   currentStanding: { type: Number },
   lastStandingUpdate: { type: Date, default: Date.now },
@@ -112,9 +130,65 @@ challengeStatsSchema.methods.canChallengeOpponent = function(opponentName) {
 
 // Method to check if player is eligible for rematch against opponent
 challengeStatsSchema.methods.canRematchOpponent = function(opponentName, originalChallengeId) {
-  // This will be implemented based on match results
-  // For now, return false - will be updated when match completion logic is added
-  return false;
+  // Check if there's a rematch eligibility record for this opponent
+  const rematchRecord = this.rematchEligibility.find(rematch => 
+    rematch.opponent === opponentName && 
+    rematch.originalChallengeId.toString() === originalChallengeId.toString()
+  );
+  
+  if (!rematchRecord) {
+    return false;
+  }
+  
+  // Check if rematch eligibility has expired
+  if (rematchRecord.expiresAt && new Date() > rematchRecord.expiresAt) {
+    return false;
+  }
+  
+  return rematchRecord.canRematch;
+};
+
+// NEW: Method to add match result
+challengeStatsSchema.methods.addMatchResult = function(challengeId, opponent, result, week) {
+  // Remove any existing pending result for this challenge
+  this.matchResults = this.matchResults.filter(match => 
+    match.challengeId.toString() !== challengeId.toString()
+  );
+  
+  // Add the new result
+  this.matchResults.push({
+    challengeId,
+    opponent,
+    result,
+    week,
+    completedAt: new Date()
+  });
+  
+  return this.save();
+};
+
+// NEW: Method to update rematch eligibility
+challengeStatsSchema.methods.updateRematchEligibility = function(opponent, originalChallengeId, canRematch, reason) {
+  // Remove any existing rematch eligibility for this opponent
+  this.rematchEligibility = this.rematchEligibility.filter(rematch => 
+    rematch.opponent !== opponent
+  );
+  
+  if (canRematch) {
+    // Add rematch eligibility (expires in 2 weeks)
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 14);
+    
+    this.rematchEligibility.push({
+      opponent,
+      originalChallengeId,
+      canRematch: true,
+      reason,
+      expiresAt
+    });
+  }
+  
+  return this.save();
 };
 
 // NEW: Method to increment times challenged

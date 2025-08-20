@@ -1,16 +1,27 @@
 import express from 'express';
-import { getAllMatches, getCompletedMatches, create, markMatchCompleted, validateMatch, rejectMatch, getMatchStats } from '../controllers/matchController.js';
+import * as matchController from '../controllers/matchController.js';
 
 const router = express.Router();
 
-router.get('/all-matches', getAllMatches);
-router.get('/completed-matches', getCompletedMatches);
-router.get('/stats/:player/:division', getMatchStats);
-router.post('/', create);
-router.patch('/completed/:id', markMatchCompleted);
+// Get all matches (with optional filters)
+router.get('/', matchController.getMatches);
 
-// New match validation routes
-router.post('/validate/:id', validateMatch);
-router.post('/reject/:id', rejectMatch);
+// Get matches by status
+router.get('/status/:division/:status', matchController.getMatchesByStatus);
+
+// Get player's matches
+router.get('/player/:playerId/:division', matchController.getPlayerMatches);
+
+// Create match from proposal
+router.post('/from-proposal', matchController.createMatchFromProposal);
+
+// Complete a match
+router.patch('/:id/complete', matchController.completeMatch);
+
+// Cancel a match
+router.patch('/:id/cancel', matchController.cancelMatch);
+
+// Get match statistics
+router.get('/stats/:division', matchController.getMatchStats);
 
 export default router; 

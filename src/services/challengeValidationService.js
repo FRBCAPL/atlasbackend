@@ -470,12 +470,14 @@ class ChallengeValidationService {
       // Update sender stats
       const senderStats = await this.getOrCreateChallengeStats(proposal.senderName, proposal.divisions[0]);
       senderStats.matchesAsChallenger += 1;
-      senderStats.totalChallengeMatches += 1;
+      // FIXED: Don't increment totalChallengeMatches here - only when match is completed
+      // senderStats.totalChallengeMatches += 1;
       senderStats.challengesByWeek.push(currentWeek);
       senderStats.challengedOpponents.push(proposal.receiverName);
       senderStats.lastChallengeWeek = currentWeek;
       
-      const senderTotalMatches = senderStats.totalChallengeMatches + senderStats.requiredDefenses;
+      // FIXED: Calculate total matches without incrementing totalChallengeMatches
+      const senderTotalMatches = senderStats.matchesAsChallenger + senderStats.requiredDefenses;
       if (senderTotalMatches >= 4) {
         senderStats.hasReachedChallengeLimit = true;
         senderStats.isEligibleForChallenges = false;
@@ -486,7 +488,8 @@ class ChallengeValidationService {
       // Update receiver stats
       const receiverStats = await this.getOrCreateChallengeStats(proposal.receiverName, proposal.divisions[0]);
       receiverStats.matchesAsDefender += 1;
-      receiverStats.totalChallengeMatches += 1;
+      // FIXED: Don't increment totalChallengeMatches here - only when match is completed
+      // receiverStats.totalChallengeMatches += 1;
       receiverStats.defendedByWeek.push(currentWeek);
       
       // NEW: Increment times challenged for the receiver
@@ -503,7 +506,8 @@ class ChallengeValidationService {
         receiverStats.hasReachedDefenseLimit = true;
       }
       
-      const receiverTotalMatches = receiverStats.totalChallengeMatches + receiverStats.requiredDefenses;
+      // FIXED: Calculate total matches without incrementing totalChallengeMatches
+      const receiverTotalMatches = receiverStats.matchesAsDefender + receiverStats.requiredDefenses;
       if (receiverTotalMatches >= 4) {
         receiverStats.isEligibleForChallenges = false;
         receiverStats.isEligibleForDefense = false;
@@ -526,6 +530,26 @@ class ChallengeValidationService {
   }
 
   /**
+   * Update challenge statistics when a match is completed
+   */
+  async updateStatsOnMatchCompleted(proposal) {
+    try {
+      // Update sender stats
+      const senderStats = await this.getOrCreateChallengeStats(proposal.senderName, proposal.divisions[0]);
+      senderStats.totalChallengeMatches += 1;
+      await senderStats.save();
+      
+      // Update receiver stats
+      const receiverStats = await this.getOrCreateChallengeStats(proposal.receiverName, proposal.divisions[0]);
+      receiverStats.totalChallengeMatches += 1;
+      await receiverStats.save();
+      
+    } catch (error) {
+      console.error('Error updating stats on match completion:', error);
+    }
+  }
+
+  /**
    * Update challenge statistics when a proposal is canceled
    */
   async updateStatsOnProposalCanceled(proposal) {
@@ -535,11 +559,13 @@ class ChallengeValidationService {
       // Revert sender stats
       const senderStats = await this.getOrCreateChallengeStats(proposal.senderName, proposal.divisions[0]);
       senderStats.matchesAsChallenger = Math.max(0, senderStats.matchesAsChallenger - 1);
-      senderStats.totalChallengeMatches = Math.max(0, senderStats.totalChallengeMatches - 1);
+      // FIXED: Don't decrement totalChallengeMatches here since we didn't increment it on creation
+      // senderStats.totalChallengeMatches = Math.max(0, senderStats.totalChallengeMatches - 1);
       senderStats.challengesByWeek = senderStats.challengesByWeek.filter(w => w !== currentWeek);
       senderStats.challengedOpponents = senderStats.challengedOpponents.filter(name => name !== proposal.receiverName);
       
-      const senderTotalMatches = senderStats.totalChallengeMatches + senderStats.requiredDefenses;
+      // FIXED: Calculate total matches without using totalChallengeMatches
+      const senderTotalMatches = senderStats.matchesAsChallenger + senderStats.requiredDefenses;
       if (senderTotalMatches < 4) {
         senderStats.hasReachedChallengeLimit = false;
         senderStats.isEligibleForChallenges = true;
@@ -550,7 +576,8 @@ class ChallengeValidationService {
       // Revert receiver stats
       const receiverStats = await this.getOrCreateChallengeStats(proposal.receiverName, proposal.divisions[0]);
       receiverStats.matchesAsDefender = Math.max(0, receiverStats.matchesAsDefender - 1);
-      receiverStats.totalChallengeMatches = Math.max(0, receiverStats.totalChallengeMatches - 1);
+      // FIXED: Don't decrement totalChallengeMatches here since we didn't increment it on creation
+      // receiverStats.totalChallengeMatches = Math.max(0, receiverStats.totalChallengeMatches - 1);
       receiverStats.defendedByWeek = receiverStats.defendedByWeek.filter(w => w !== currentWeek);
       
       // NEW: Decrement times challenged for the receiver
@@ -567,7 +594,8 @@ class ChallengeValidationService {
         receiverStats.hasReachedDefenseLimit = false;
       }
       
-      const receiverTotalMatches = receiverStats.totalChallengeMatches + receiverStats.requiredDefenses;
+      // FIXED: Calculate total matches without using totalChallengeMatches
+      const receiverTotalMatches = receiverStats.matchesAsDefender + receiverStats.requiredDefenses;
       if (receiverTotalMatches < 4) {
         receiverStats.isEligibleForChallenges = true;
         receiverStats.isEligibleForDefense = true;

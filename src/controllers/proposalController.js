@@ -1,6 +1,9 @@
 import Proposal from '../models/Proposal.js';
 import CanceledProposal from '../models/CanceledProposal.js';
+import Match from '../models/Match.js';
+import User from '../models/User.js';
 import challengeValidationService from '../services/challengeValidationService.js';
+import { addMatchToCalendars } from '../services/calendarService.js';
 
 export const getByReceiver = async (req, res) => {
   try {
@@ -141,6 +144,51 @@ export const updateStatus = async (req, res) => {
     if (status === "confirmed") {
       proposal.completed = false;
       console.log('[updateStatus] Setting completed=false for proposal:', proposal._id);
+      
+      // Create a match from the confirmed proposal
+      try {
+        // Check if match already exists for this proposal
+        const existingMatch = await Match.findOne({ proposalId: proposal._id });
+        
+        if (!existingMatch) {
+          const match = new Match({
+            proposalId: proposal._id,
+            player1Id: proposal.senderName,
+            player2Id: proposal.receiverName,
+            division: proposal.divisions[0], // Assuming single division
+            type: proposal.type || (proposal.phase === 'schedule' ? 'schedule' : 'challenge'),
+            status: 'scheduled',
+            scheduledDate: proposal.date || new Date(),
+            location: proposal.location || 'TBD',
+            notes: proposal.notes || ''
+          });
+          
+          await match.save();
+          console.log('[updateStatus] Created match from proposal:', match._id);
+          
+          // Add match to calendars (app calendar always, Google Calendar optional)
+          try {
+            // Check user preferences for Google Calendar integration
+            const senderUser = await User.findOne({ $or: [{ id: proposal.senderName }, { email: proposal.senderEmail }] });
+            const receiverUser = await User.findOne({ $or: [{ id: proposal.receiverName }, { email: proposal.receiverEmail }] });
+            
+            // Use preferences if available, otherwise default to false
+            const senderPrefersGoogleCalendar = senderUser?.preferences?.googleCalendarIntegration ?? false;
+            const receiverPrefersGoogleCalendar = receiverUser?.preferences?.googleCalendarIntegration ?? false;
+            
+            // Add to calendars - app calendar always, Google Calendar based on user preferences
+            await addMatchToCalendars(proposal, senderPrefersGoogleCalendar || receiverPrefersGoogleCalendar);
+          } catch (calendarError) {
+            console.error('[updateStatus] Error adding match to calendars:', calendarError);
+            // Don't fail the proposal update if calendar integration fails
+          }
+        } else {
+          console.log('[updateStatus] Match already exists for proposal:', proposal._id);
+        }
+      } catch (matchError) {
+        console.error('[updateStatus] Error creating match from proposal:', matchError);
+        // Don't fail the proposal update if match creation fails
+      }
     }
     await proposal.save();
     console.log('[updateStatus] Proposal after save:', proposal);

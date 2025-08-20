@@ -98,7 +98,8 @@ export const getChallengeStats = async (req, res) => {
       division: stats.division,
       currentStanding: currentPosition,
       currentWeek,
-      totalChallengeMatches: stats.totalChallengeMatches,
+      // FIXED: Calculate totalChallengeMatches as matchesAsChallenger + matchesAsDefender
+      totalChallengeMatches: stats.matchesAsChallenger + stats.matchesAsDefender,
       matchesAsChallenger: stats.matchesAsChallenger,
       matchesAsDefender: stats.matchesAsDefender,
       requiredDefenses: stats.requiredDefenses,
@@ -196,7 +197,8 @@ export const getChallengeLimits = async (req, res) => {
         maxMatchesPerWeek: 1
       },
       usage: {
-        totalChallengeMatches: stats.totalChallengeMatches,
+        // FIXED: Calculate totalChallengeMatches as matchesAsChallenger + matchesAsDefender
+        totalChallengeMatches: stats.matchesAsChallenger + stats.matchesAsDefender,
         matchesAsChallenger: stats.matchesAsChallenger,
         matchesAsDefender: stats.matchesAsDefender,
         requiredDefenses: stats.requiredDefenses,
@@ -260,7 +262,8 @@ export const getDivisionChallengeStats = async (req, res) => {
       players: stats.map(stat => ({
         playerName: stat.playerName,
         currentStanding: stat.currentStanding,
-        totalChallengeMatches: stat.totalChallengeMatches,
+        // FIXED: Calculate totalChallengeMatches as matchesAsChallenger + matchesAsDefender
+        totalChallengeMatches: stat.matchesAsChallenger + stat.matchesAsDefender,
         matchesAsChallenger: stat.matchesAsChallenger,
         matchesAsDefender: stat.matchesAsDefender,
         requiredDefenses: stat.requiredDefenses,
@@ -278,7 +281,8 @@ export const getDivisionChallengeStats = async (req, res) => {
         playersAtDefenseLimit: stats.filter(s => s.hasReachedDefenseLimit).length,
         playersEligibleForChallenges: stats.filter(s => s.isEligibleForChallenges).length,
         playersEligibleForDefense: stats.filter(s => s.isEligibleForDefense).length,
-        totalChallengeMatches: stats.reduce((sum, s) => sum + s.totalChallengeMatches, 0),
+        // FIXED: Calculate totalChallengeMatches as sum of matchesAsChallenger + matchesAsDefender
+        totalChallengeMatches: stats.reduce((sum, s) => sum + s.matchesAsChallenger + s.matchesAsDefender, 0),
         totalDefenses: stats.reduce((sum, s) => sum + s.totalDefenses, 0)
       }
     };
@@ -484,6 +488,9 @@ export const reportMatchResult = async (req, res) => {
     }
     
     await challenge.save();
+    
+    // Update totalChallengeMatches when match is completed
+    await challengeValidationService.updateStatsOnMatchCompleted(challenge);
     
     // Update challenge stats for both players
     const senderStats = await ChallengeStats.findOne({ 

@@ -1,307 +1,192 @@
-import Proposal from '../models/Proposal.js';
 import Match from '../models/Match.js';
-import fs from 'fs';
-import path from 'path';
+import Proposal from '../models/Proposal.js';
 
-export const getAllMatches = async (req, res) => {
-  const { player, division, phase } = req.query;
-  console.log('getAllMatches called with:', { player, division, phase }); // Debug log
-  if (!player) return res.status(400).json({ error: 'Missing player' });
-
-  const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const playerRegex = new RegExp(`^${trimmedPlayer}$`, 'i');
-
-  // --- New Filter logic using top-level 'completed' field ---
-  // Scheduled: status confirmed, completed false
-  // Completed: status confirmed, completed true
-  const baseFilter = {
-    status: 'confirmed',
-    $or: [
-      { senderName: playerRegex },
-      { receiverName: playerRegex }
-    ]
-  };
-  if (division) {
-    // Use case-insensitive regex for division matching
-    baseFilter.divisions = { $elemMatch: { $regex: `^${division}$`, $options: "i" } };
-  }
-  if (phase) {
-    baseFilter.phase = phase;
-  }
-
-  // Scheduled (not completed) - handle both false and undefined
-  const scheduledFilter = {
-    $and: [
-      {
-        $or: [
-          { senderName: playerRegex },
-          { receiverName: playerRegex }
-        ]
-      },
-      {
-        $or: [
-          { completed: false },
-          { completed: { $exists: false } }
-        ]
-      }
-    ]
-  };
-  if (division) {
-    scheduledFilter.divisions = { $elemMatch: { $regex: `^${division}$`, $options: "i" } };
-  }
-  if (phase) {
-    scheduledFilter.phase = phase;
-  }
-  // Completed
-  const completedFilter = {
-    ...baseFilter,
-    completed: true
-  };
-  if (phase) {
-    completedFilter.phase = phase;
-  }
-
+// Get all matches for a division
+export const getMatches = async (req, res) => {
   try {
-    console.log('Backend filter for scheduled:', JSON.stringify(scheduledFilter, null, 2));
-    console.log('Backend filter for completed:', JSON.stringify(completedFilter, null, 2));
+    const { division, status } = req.query;
+    const filter = {};
     
-    const scheduled = await Proposal.find(scheduledFilter).lean();
-    const completed = await Proposal.find(completedFilter).lean();
+    if (division) filter.division = division;
+    if (status) filter.status = status;
     
-    console.log('Backend found scheduled matches:', scheduled.length);
-    console.log('Backend found completed matches:', completed.length);
+    const matches = await Match.find(filter)
+      .populate('proposalId', 'senderName receiverName')
+      .sort({ scheduledDate: -1 });
     
-    // Return all matches with proper completed field
-    const allMatches = [
-      ...scheduled.map(p => ({ ...p, completed: false })),
-      ...completed.map(p => ({ ...p, completed: true }))
-    ];
-    
-    console.log('Backend returning total matches:', allMatches.length);
-    res.json(allMatches);
+    res.json(matches);
   } catch (err) {
-    console.error('Error fetching all matches:', err);
+    console.error('Error fetching matches:', err);
     res.status(500).json({ error: 'Failed to fetch matches' });
   }
 };
 
-export const getCompletedMatches = async (req, res) => {
-  const { player, division } = req.query;
-  console.log('getCompletedMatches called with:', { player, division }); // Debug log
-  if (!player) return res.status(400).json({ error: 'Missing player' });
-
-  // Add more detailed logging
-  console.log('Raw player name (completed):', player);
-  console.log('Player name type (completed):', typeof player);
-  console.log('Player name length (completed):', player.length);
-
-  const trimmedPlayer = player.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  console.log('Trimmed and escaped player name (completed):', trimmedPlayer);
-  
-  const playerRegex = new RegExp(`^${trimmedPlayer}$`, 'i');
-  console.log('Created regex (completed):', playerRegex);
-
-  // Only return proposals that are confirmed and completed
-  const filter = {
-    status: "confirmed",
-    completed: true,
-    $or: [
-      { senderName: playerRegex },
-      { receiverName: playerRegex }
-    ]
-  };
-  if (division) {
-    // Use case-insensitive regex for division matching
-    filter.divisions = { $elemMatch: { $regex: `^${division}$`, $options: "i" } };
-  }
-
-  // Log the filter in a way that shows the regex properly
-  console.log('MongoDB filter (completed, stringified):', JSON.stringify(filter, (key, value) => {
-    if (value instanceof RegExp) {
-      return value.toString();
-    }
-    return value;
-  }, 2));
-
+// Get matches by status
+export const getMatchesByStatus = async (req, res) => {
   try {
-    const proposals = await Proposal.find(filter).lean();
-    res.json(proposals);
+    const { division, status } = req.params;
+    const matches = await Match.getByStatus(division, status);
+    
+    res.json(matches);
   } catch (err) {
-    console.error('Error fetching completed matches:', err);
-    res.status(500).json({ error: 'Failed to fetch completed matches' });
+    console.error('Error fetching matches by status:', err);
+    res.status(500).json({ error: 'Failed to fetch matches' });
   }
 };
 
-export const create = async (req, res) => {
+// Get player's matches
+export const getPlayerMatches = async (req, res) => {
   try {
-    const match = new Match(req.body);
+    const { playerId, division } = req.params;
+    const matches = await Match.getPlayerMatches(playerId, division);
+    
+    res.json(matches);
+  } catch (err) {
+    console.error('Error fetching player matches:', err);
+    res.status(500).json({ error: 'Failed to fetch player matches' });
+  }
+};
+
+// Create a match from a proposal
+export const createMatchFromProposal = async (req, res) => {
+  try {
+    const { proposalId } = req.body;
+    
+    // Find the proposal
+    const proposal = await Proposal.findById(proposalId);
+    if (!proposal) {
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
+    
+    // Check if match already exists for this proposal
+    const existingMatch = await Match.findOne({ proposalId });
+    if (existingMatch) {
+      return res.status(400).json({ error: 'Match already exists for this proposal' });
+    }
+    
+    // Create new match
+    const match = new Match({
+      proposalId: proposal._id,
+      player1Id: proposal.senderName,
+      player2Id: proposal.receiverName,
+      division: proposal.divisions[0], // Assuming single division for now
+      type: proposal.type || 'schedule',
+      scheduledDate: proposal.date || new Date(),
+      location: proposal.location || 'TBD'
+    });
+    
     await match.save();
-    res.json({ success: true, match });
-  } catch (err) {
-    console.error('Error saving match:', err);
-    res.status(500).json({ error: 'Failed to save match' });
-  }
-};
-
-export const markMatchCompleted = async (req, res) => {
-  const { id } = req.params;
-  const { winner, markedByName, markedByEmail } = req.body;
-  if (!id) return res.status(400).json({ error: 'Missing proposal ID' });
-  try {
-    const proposal = await Proposal.findById(id);
-    if (!proposal) {
-      return res.status(404).json({ error: 'Proposal not found' });
-    }
-    proposal.completed = true;
-    if (typeof winner !== 'undefined') {
-      proposal.winner = winner;
-    }
-    proposal.winnerChangedByName = markedByName || null;
-    proposal.winnerChangedByEmail = markedByEmail || null;
-    proposal.winnerChangedAt = new Date();
+    
+    // Update proposal status to accepted
+    proposal.status = 'confirmed';
     await proposal.save();
-    res.json({ success: true, proposal });
+    
+    res.status(201).json({ 
+      success: true, 
+      matchId: match._id,
+      message: 'Match created successfully' 
+    });
+    
   } catch (err) {
-    console.error("Error in markMatchCompleted:", err);
-    res.status(500).json({ error: 'Failed to mark match as completed' });
+    console.error('Error creating match from proposal:', err);
+    res.status(500).json({ error: 'Failed to create match' });
   }
 };
 
-// New match validation controller
-export const validateMatch = async (req, res) => {
-  const { id } = req.params;
-  const { 
-    actualDate, 
-    actualTime, 
-    actualLocation, 
-    winner, 
-    score, 
-    notes, 
-    witnesses,
-    validatedBy 
-  } = req.body;
-
-  if (!id) return res.status(400).json({ error: 'Missing proposal ID' });
-  if (!actualDate || !winner || !score) {
-    return res.status(400).json({ error: 'Missing required fields: actualDate, winner, score' });
-  }
-
+// Complete a match
+export const completeMatch = async (req, res) => {
   try {
-    const proposal = await Proposal.findById(id);
-    if (!proposal) {
-      return res.status(404).json({ error: 'Proposal not found' });
+    const { id } = req.params;
+    const { winner, score, notes } = req.body;
+    
+    const match = await Match.findById(id);
+    if (!match) {
+      return res.status(404).json({ error: 'Match not found' });
     }
-
-    // Add validation data
-    proposal.validationData = {
-      actualDate: new Date(actualDate),
-      actualTime: actualTime || null,
-      actualLocation: actualLocation || proposal.location,
-      winner,
-      score,
-      notes: notes || null,
-      witnesses: witnesses || null,
-      validatedBy: validatedBy || null,
-      validatedAt: new Date()
-    };
-
-    // Mark as validated
-    proposal.validated = true;
-    proposal.completed = true;
-    proposal.winner = winner;
-
-    await proposal.save();
-    res.json({ success: true, proposal });
+    
+    if (match.status === 'completed') {
+      return res.status(400).json({ error: 'Match is already completed' });
+    }
+    
+    // Complete the match
+    await match.complete(winner, score, notes);
+    
+    // Update the original proposal as well
+    await Proposal.findByIdAndUpdate(match.proposalId, {
+      completed: true,
+      winner: winner,
+      loser: match.player1Id === winner ? match.player2Id : match.player1Id
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Match completed successfully',
+      match 
+    });
+    
   } catch (err) {
-    console.error("Error in validateMatch:", err);
-    res.status(500).json({ error: 'Failed to validate match' });
+    console.error('Error completing match:', err);
+    res.status(500).json({ error: 'Failed to complete match' });
   }
 };
 
-// New match rejection controller
-export const rejectMatch = async (req, res) => {
-  const { id } = req.params;
-  const { rejectedBy, reason } = req.body;
-
-  if (!id) return res.status(400).json({ error: 'Missing proposal ID' });
-
+// Cancel a match
+export const cancelMatch = async (req, res) => {
   try {
-    const proposal = await Proposal.findById(id);
-    if (!proposal) {
-      return res.status(404).json({ error: 'Proposal not found' });
+    const { id } = req.params;
+    const { reason } = req.body;
+    
+    const match = await Match.findById(id);
+    if (!match) {
+      return res.status(404).json({ error: 'Match not found' });
     }
-
-    // Reset completion status
-    proposal.completed = false;
-    proposal.winner = null;
-    proposal.winnerChangedByName = null;
-    proposal.winnerChangedByEmail = null;
-    proposal.winnerChangedAt = null;
-
-    // Add rejection data
-    proposal.rejectionData = {
-      rejectedBy: rejectedBy || null,
-      reason: reason || 'Match validation failed',
-      rejectedAt: new Date()
-    };
-
-    // Clear validation data if it exists
-    if (proposal.validationData) {
-      proposal.validationData = null;
+    
+    if (match.status === 'completed') {
+      return res.status(400).json({ error: 'Cannot cancel completed match' });
     }
-    proposal.validated = false;
-
-    await proposal.save();
-    res.json({ success: true, proposal });
+    
+    await match.cancel(reason);
+    
+    res.json({ 
+      success: true, 
+      message: 'Match cancelled successfully',
+      match 
+    });
+    
   } catch (err) {
-    console.error("Error in rejectMatch:", err);
-    res.status(500).json({ error: 'Failed to reject match' });
+    console.error('Error cancelling match:', err);
+    res.status(500).json({ error: 'Failed to cancel match' });
   }
 };
 
-// New match statistics controller for standings impact
+// Get match statistics
 export const getMatchStats = async (req, res) => {
-  const { player, division } = req.params;
-  
-  if (!player || !division) {
-    return res.status(400).json({ error: 'Missing player or division' });
-  }
-
   try {
-    const playerRegex = new RegExp(`^${player.trim()}$`, 'i');
+    const { division } = req.params;
     
-    // Get all matches for the player in the division
-    const allMatches = await Proposal.find({
-      divisions: { $elemMatch: { $regex: `^${division}$`, $options: "i" } },
-      $or: [
-        { senderName: playerRegex },
-        { receiverName: playerRegex }
-      ]
-    }).lean();
-
-    // Calculate statistics
-    const stats = {
-      totalMatches: allMatches.length,
-      completedMatches: allMatches.filter(m => m.completed).length,
-      validatedMatches: allMatches.filter(m => m.validated).length,
-      wins: allMatches.filter(m => m.completed && m.winner === player).length,
-      losses: allMatches.filter(m => m.completed && m.winner && m.winner !== player).length,
-      pendingValidation: allMatches.filter(m => m.completed && !m.validated).length,
-      phase1Matches: allMatches.filter(m => m.phase === 1 || m.phase === 'scheduled').length,
-      phase2Matches: allMatches.filter(m => m.phase === 2 || m.phase === 'challenge').length
-    };
-
-    // Calculate potential standings impact
-    const remainingMatches = stats.totalMatches - stats.completedMatches;
-    const potentialPoints = remainingMatches * 2; // Assuming 2 points per match
+    const stats = await Match.aggregate([
+      { $match: { division } },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
     
-    stats.remainingMatches = remainingMatches;
-    stats.potentialPoints = potentialPoints;
-    stats.completionPercentage = stats.totalMatches > 0 ? Math.round((stats.completedMatches / stats.totalMatches) * 100) : 0;
-
-    res.json({ success: true, stats });
+    const totalMatches = await Match.countDocuments({ division });
+    const completedMatches = await Match.countDocuments({ division, status: 'completed' });
+    const scheduledMatches = await Match.countDocuments({ division, status: 'scheduled' });
+    
+    res.json({
+      total: totalMatches,
+      completed: completedMatches,
+      scheduled: scheduledMatches,
+      breakdown: stats
+    });
+    
   } catch (err) {
-    console.error("Error in getMatchStats:", err);
-    res.status(500).json({ error: 'Failed to get match statistics' });
+    console.error('Error fetching match stats:', err);
+    res.status(500).json({ error: 'Failed to fetch match statistics' });
   }
 }; 

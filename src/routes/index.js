@@ -9,6 +9,7 @@ import mongoose from 'mongoose';
 // New seasons routes
 import seasonRoutes from './seasons.js';
 import messagesRoutes from './messages.js';
+import calendarRoutes from './calendar.js';
 
 const router = express.Router();
 
@@ -19,6 +20,7 @@ router.use('/notes', noteRoutes);
 router.use('/challenges', challengeRoutes);
 router.use('/seasons', seasonRoutes);
 router.use('/messages', messagesRoutes);
+router.use('/calendar', calendarRoutes);
 
 // Simple test route
 router.get('/test', (req, res) => {

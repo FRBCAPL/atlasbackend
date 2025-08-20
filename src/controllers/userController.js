@@ -32,4 +32,39 @@ export const syncUsers = async (req, res) => {
     console.error('Error syncing users:', err);
     res.status(500).json({ error: 'Failed to sync users' });
   }
+};
+
+export const updatePreferences = async (req, res) => {
+  try {
+    const { idOrEmail } = req.params;
+    const { preferences } = req.body;
+    
+    if (!preferences) {
+      return res.status(400).json({ error: 'Preferences object is required' });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { $or: [ { id: idOrEmail }, { email: idOrEmail } ] },
+      { 
+        $set: { 
+          preferences: {
+            ...preferences,
+            // Ensure we don't overwrite existing preferences
+            googleCalendarIntegration: preferences.googleCalendarIntegration ?? false,
+            emailNotifications: preferences.emailNotifications ?? true
+          }
+        } 
+      },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ success: true, user });
+  } catch (err) {
+    console.error('Error updating user preferences:', err);
+    res.status(500).json({ error: 'Failed to update preferences' });
+  }
 }; 

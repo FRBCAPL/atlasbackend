@@ -460,7 +460,7 @@ async function startServer() {
 
   app.get('/admin/divisions', async (req, res) => {
     try {
-      const divisions = await Division.find({}, { _id: 0, name: 1, description: 1 }).lean();
+      const divisions = await Division.find({}, { _id: 1, name: 1, description: 1 }).lean();
       res.json(divisions);
     } catch (err) {
       console.error('Error fetching divisions:', err);

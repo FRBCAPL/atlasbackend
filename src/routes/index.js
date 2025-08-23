@@ -14,6 +14,7 @@ import leagueConfigRoutes from './leagueConfig.js';
 import authRoutes from './auth.js';
 import locationRoutes from './locations.js';
 import paymentConfigRoutes from './paymentConfig.js';
+import divisionConfigRoutes from './divisionConfig.js';
 
 const router = express.Router();
 
@@ -29,6 +30,7 @@ router.use('/league-config', leagueConfigRoutes);
 router.use('/auth', authRoutes);
 router.use('/locations', locationRoutes);
 router.use('/payment-config', paymentConfigRoutes);
+router.use('/division-config', divisionConfigRoutes);
 
 // Simple test route
 router.get('/test', (req, res) => {

@@ -39,10 +39,11 @@ const allowedOrigins = [
   'http://www.frontrangepool.com',
 ];
 
+// Create the Express app
+const app = express();
+
 async function startServer() {
   await connectDB();
-
-  const app = express();
 
   // CORS setup (allow dev and production frontend origins)
   app.use(cors({
@@ -495,11 +496,13 @@ async function startServer() {
         return res.json([]);
       }
       
-      const { default: User } = await import('./models/User.js');
+      const { default: User } = await import('./src/models/User.js');
       const users = await User.find({
         $or: [
-          { name: { $regex: query, $options: 'i' } },
-          { email: { $regex: query, $options: 'i' } }
+          { firstName: { $regex: query, $options: 'i' } },
+          { lastName: { $regex: query, $options: 'i' } },
+          { email: { $regex: query, $options: 'i' } },
+          { phone: { $regex: query, $options: 'i' } }
         ]
       }).lean();
       
@@ -512,7 +515,7 @@ async function startServer() {
 
   app.post('/admin/convert-divisions', async (req, res) => {
     try {
-      const User = await import('./models/User.js');
+      const { default: User } = await import('./src/models/User.js');
       const users = await User.find({});
       let modified = 0;
       
@@ -541,7 +544,7 @@ async function startServer() {
         return res.status(400).json({ error: 'Division is required' });
       }
       
-      const User = await import('./models/User.js');
+      const { default: User } = await import('./src/models/User.js');
       const user = await User.findOne({ $or: [{ email: userId }, { id: userId }] });
       
       if (!user) {
@@ -573,7 +576,7 @@ async function startServer() {
         return res.status(400).json({ error: 'Division is required' });
       }
       
-      const User = await import('./models/User.js');
+      const { default: User } = await import('./src/models/User.js');
       const user = await User.findOne({ $or: [{ email: userId }, { id: userId }] });
       
       if (!user) {
@@ -783,5 +786,8 @@ async function startServer() {
 
   
 }
+
+// Export app for testing
+export { app };
 
 startServer(); 

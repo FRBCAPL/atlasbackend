@@ -10,6 +10,10 @@ import mongoose from 'mongoose';
 import seasonRoutes from './seasons.js';
 import messagesRoutes from './messages.js';
 import calendarRoutes from './calendar.js';
+import leagueConfigRoutes from './leagueConfig.js';
+import authRoutes from './auth.js';
+import locationRoutes from './locations.js';
+import paymentConfigRoutes from './paymentConfig.js';
 
 const router = express.Router();
 
@@ -21,6 +25,10 @@ router.use('/challenges', challengeRoutes);
 router.use('/seasons', seasonRoutes);
 router.use('/messages', messagesRoutes);
 router.use('/calendar', calendarRoutes);
+router.use('/league-config', leagueConfigRoutes);
+router.use('/auth', authRoutes);
+router.use('/locations', locationRoutes);
+router.use('/payment-config', paymentConfigRoutes);
 
 // Simple test route
 router.get('/test', (req, res) => {

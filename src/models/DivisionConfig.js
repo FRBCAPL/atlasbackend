@@ -17,6 +17,18 @@ const divisionConfigSchema = new mongoose.Schema({
     min: 1,
     max: 20
   },
+  phase2Weeks: {
+    type: Number,
+    default: 4,
+    min: 1,
+    max: 20
+  },
+  totalWeeks: {
+    type: Number,
+    default: 10,
+    min: 2,
+    max: 40
+  },
   currentSession: {
     name: {
       type: String,

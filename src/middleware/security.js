@@ -4,7 +4,7 @@ import { body, validationResult } from 'express-validator';
 // Rate limiting middleware
 export const rateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 1000, // Limit each IP to 1000 requests per windowMs (increased for production)
   message: {
     error: 'Too many requests from this IP, please try again later.',
     retryAfter: '15 minutes'
@@ -16,7 +16,7 @@ export const rateLimiter = rateLimit({
 // Stricter rate limit for auth endpoints
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 auth requests per windowMs
+  max: 50, // Limit each IP to 50 auth requests per windowMs (increased for production)
   message: {
     error: 'Too many authentication attempts, please try again later.',
     retryAfter: '15 minutes'
@@ -28,7 +28,7 @@ export const authRateLimiter = rateLimit({
 // Stricter rate limit for proposal creation
 export const proposalRateLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 10, // Limit each IP to 10 proposals per 5 minutes
+  max: 100, // Limit each IP to 100 proposals per 5 minutes (increased for production)
   message: {
     error: 'Too many proposals created, please slow down.',
     retryAfter: '5 minutes'
@@ -40,7 +40,7 @@ export const proposalRateLimiter = rateLimit({
 // Production-ready rate limit for admin endpoints
 export const adminRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // Limit each IP to 20 admin requests per windowMs
+  max: 200, // Limit each IP to 200 admin requests per windowMs (increased for production)
   message: {
     error: 'Too many admin requests, please try again later.',
     retryAfter: '15 minutes'

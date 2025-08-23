@@ -29,9 +29,12 @@
     "dotenv": "^16.5.0",
     "emailjs-com": "^3.2.0",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.0.1",
+    "express-validator": "^7.2.1",
     "googleapis": "^150.0.1",
     "helmet": "^8.1.0",
     "mongoose": "^8.16.0",
+    "morgan": "^1.10.1",
     "node-cron": "^4.1.0",
     "stream-chat": "^9.1.1"
   },

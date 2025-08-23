@@ -99,8 +99,22 @@ router.get('/check-pin/:pin', async (req, res) => {
   try {
     const { pin } = req.params;
     
-    // Check if PIN exists in database
-    const existingUser = await User.findOne({ pin });
+    // Since PINs are hashed, we need to check all users
+    const allUsers = await User.find({});
+    let existingUser = null;
+    
+    for (const user of allUsers) {
+      try {
+        const isPinMatch = await user.comparePin(pin);
+        if (isPinMatch) {
+          existingUser = user;
+          break;
+        }
+      } catch (error) {
+        // Continue checking other users
+        continue;
+      }
+    }
     
     res.json({ 
       success: true, 
@@ -233,6 +247,136 @@ router.get('/:userId/payments', async (req, res) => {
   } catch (error) {
     console.error('Error fetching payments:', error);
     res.status(500).json({ success: false, message: 'Error fetching payments' });
+  }
+});
+
+// Debug endpoint to help troubleshoot login issues
+router.get('/debug-users', async (req, res) => {
+  try {
+    const users = await User.find({}, {
+      firstName: 1,
+      lastName: 1,
+      email: 1,
+      isApproved: 1,
+      isActive: 1,
+      hasPin: 1 // Check if PIN field exists
+    }).lean();
+    
+    res.json({
+      success: true,
+      userCount: users.length,
+      users: users.map(user => ({
+        name: `${user.firstName} ${user.lastName}`,
+        email: user.email,
+        isApproved: user.isApproved,
+        isActive: user.isActive,
+        hasPin: !!user.pin
+      }))
+    });
+  } catch (error) {
+    console.error('Error in debug endpoint:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching user debug info'
+    });
+  }
+});
+
+// Test PIN endpoint (for debugging only)
+router.post('/test-pin', async (req, res) => {
+  try {
+    const { email, pin } = req.body;
+    
+    if (!email || !pin) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and PIN are required'
+      });
+    }
+    
+    const user = await User.findOne({ 
+      email: { $regex: new RegExp(`^${email}$`, 'i') }
+    });
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+        debug: { email, userExists: false }
+      });
+    }
+    
+    const isValidPin = await user.comparePin(pin);
+    
+    res.json({
+      success: true,
+      userFound: true,
+      isValidPin,
+      userInfo: {
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        isApproved: user.isApproved,
+        isActive: user.isActive,
+        hasPin: !!user.pin
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error testing PIN:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error testing PIN',
+      error: error.message
+    });
+  }
+});
+
+// Quick admin approval endpoint (for emergency admin access)
+router.post('/approve-admin/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    const user = await User.findOne({ 
+      email: { $regex: new RegExp(`^${email}$`, 'i') }
+    });
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    // Approve the user and make them admin
+    user.isApproved = true;
+    user.isAdmin = true;
+    user.isActive = true;
+    user.approvalDate = new Date();
+    user.approvedBy = 'emergency-admin-fix';
+    
+    await user.save();
+    
+    res.json({
+      success: true,
+      message: 'User approved and made admin successfully',
+      user: {
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        isApproved: user.isApproved,
+        isAdmin: user.isAdmin,
+        isActive: user.isActive
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error approving admin:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error approving admin',
+      error: error.message
+    });
   }
 });
 

@@ -23,6 +23,41 @@ dotenv.config();
 import apiRoutes from './src/routes/index.js';
 import Division from './src/models/Division.js';
 
+// Import security middleware
+import { 
+  rateLimiter, 
+  authRateLimiter, 
+  proposalRateLimiter, 
+  adminRateLimiter,
+  requestSizeLimit, 
+  sanitizeInput,
+  securityHeaders,
+  securityLogging,
+  ipBlocking,
+  validateContentType,
+  requestTimeout
+} from './src/middleware/security.js';
+import { 
+  devLogging, 
+  prodLogging, 
+  errorLogging, 
+  requestLogger, 
+  errorLogger 
+} from './src/middleware/logging.js';
+import { 
+  basicHealthCheck, 
+  detailedHealthCheck, 
+  readinessCheck, 
+  livenessCheck, 
+  metrics 
+} from './src/middleware/health.js';
+import { 
+  errorHandler, 
+  notFoundHandler, 
+  gracefulShutdown, 
+  setupGlobalErrorHandlers 
+} from './src/middleware/errorHandler.js';
+
 const allowedOrigins = [
   'https://frusapl.com',
   'https://www.frontrangepool.com',
@@ -61,9 +96,41 @@ async function startServer() {
 
   app.use(helmet());
 
+  // Enhanced security middleware
+  app.use(securityHeaders);
+  app.use(securityLogging);
+  app.use(ipBlocking);
+  app.use(validateContentType);
+  app.use(requestTimeout(30000)); // 30 second timeout
+  app.use(requestSizeLimit);
+  app.use(sanitizeInput);
+  
+  // Rate limiting - apply to all routes
+  app.use(rateLimiter);
+  
+  // Stricter rate limiting for auth endpoints
+  app.use('/api/users/check-pin', authRateLimiter);
+  app.use('/api/users/:userId/confirm-payment', authRateLimiter);
+  
+  // Stricter rate limiting for proposal creation
+  app.use('/api/proposals', proposalRateLimiter);
+  app.use('/api/challenges', proposalRateLimiter);
+  
+  // Rate limiting for admin endpoints
+  app.use('/api/admin', adminRateLimiter);
+
+  // Logging middleware
+  if (process.env.NODE_ENV === 'production') {
+    app.use(prodLogging);
+  } else {
+    app.use(devLogging);
+  }
+  app.use(errorLogging);
+  app.use(requestLogger);
+
   console.log('Serving static files from:', path.join(__dirname, 'public'));
   app.use('/static', express.static(path.join(__dirname, 'public')));
-  app.use(express.json());
+  app.use(express.json({ limit: '1mb' }));
 
   // Remove any direct mongoose.connect(...) calls from server.js
   // Ensure all MongoDB connections are handled through database.js
@@ -270,8 +337,18 @@ async function startServer() {
     }
   });
 
+  // Health check endpoints (for Render monitoring)
+  app.get('/health', basicHealthCheck);
+  app.get('/health/detailed', detailedHealthCheck);
+  app.get('/ready', readinessCheck);
+  app.get('/live', livenessCheck);
+  app.get('/metrics', metrics);
+
   // API routes
   app.use('/api', apiRoutes);
+
+  // Error handling middleware (must be last)
+  app.use(errorLogger);
 
   // Admin endpoints
   app.post('/admin/update-standings', (req, res) => {
@@ -691,11 +768,11 @@ async function startServer() {
   // Health check
   app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
-  // Error handling middleware
-  app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
-    res.status(500).json({ error: 'An unexpected error occurred. Please try again later.' });
-  });
+  // 404 handler for undefined routes
+  app.use(notFoundHandler);
+
+  // Error handling middleware (must be last)
+  app.use(errorHandler);
 
   // Serve division-specific standings JSON
   app.get('/static/standings_:division.json', (req, res) => {
@@ -742,10 +819,22 @@ async function startServer() {
     res.send('Backend is alive and running the latest code!');
   });
 
+  // Setup global error handlers
+  setupGlobalErrorHandlers();
+
   const PORT = process.env.PORT || 8080;
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📊 Health check available at http://localhost:${PORT}/health`);
+    console.log(`🔍 Detailed health check at http://localhost:${PORT}/health/detailed`);
+    console.log(`✅ Readiness check at http://localhost:${PORT}/ready`);
+    console.log(`💓 Liveness check at http://localhost:${PORT}/live`);
+    console.log(`📈 Metrics available at http://localhost:${PORT}/metrics`);
   });
+
+  // Graceful shutdown handling
+  process.on('SIGTERM', gracefulShutdown(server));
+  process.on('SIGINT', gracefulShutdown(server));
 
   // Cron job for cleanup
   cron.schedule('0 2 * * *', () => {

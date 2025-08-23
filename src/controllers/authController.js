@@ -24,10 +24,13 @@ export const login = async (req, res) => {
       
       for (const potentialUser of allUsers) {
         try {
-          const isPinMatch = await potentialUser.comparePin(identifier);
-          if (isPinMatch) {
-            user = potentialUser;
-            break;
+          // Only try to compare PIN if the user actually has a PIN
+          if (potentialUser.pin && potentialUser.pin.length > 0) {
+            const isPinMatch = await potentialUser.comparePin(identifier);
+            if (isPinMatch) {
+              user = potentialUser;
+              break;
+            }
           }
         } catch (error) {
           // Continue checking other users
@@ -59,9 +62,11 @@ export const login = async (req, res) => {
       });
     }
 
-    // Update last login
-    user.lastLogin = new Date();
-    await user.save();
+    // Update last login using updateOne to avoid validation errors
+    await User.updateOne(
+      { _id: user._id },
+      { $set: { lastLogin: new Date() } }
+    );
 
     // Return user data (without sensitive information)
     res.json({

@@ -16,6 +16,9 @@ import locationRoutes from './locations.js';
 import paymentConfigRoutes from './paymentConfig.js';
 import divisionConfigRoutes from './divisionConfig.js';
 
+// Platform admin routes
+import platformAdminRoutes from './platformAdmin.js';
+
 const router = express.Router();
 
 router.use('/proposals', proposalRoutes);
@@ -31,6 +34,9 @@ router.use('/auth', authRoutes);
 router.use('/locations', locationRoutes);
 router.use('/payment-config', paymentConfigRoutes);
 router.use('/division-config', divisionConfigRoutes);
+
+// Platform admin routes
+router.use('/platform', platformAdminRoutes);
 
 // Simple test route
 router.get('/test', (req, res) => {

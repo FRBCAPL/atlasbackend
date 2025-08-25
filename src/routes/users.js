@@ -132,22 +132,54 @@ router.get('/check-pin/:pin', async (req, res) => {
 // Add payment to user
 router.post('/:userId/add-payment', async (req, res) => {
   try {
+    console.log('🎯 PAYMENT ENDPOINT HIT - DEBUG VERSION');
+    console.log('=== PAYMENT DEBUG START ===');
+    console.log('Add payment request:', { params: req.params, body: req.body });
+    
     const { userId } = req.params;
     const { amount, paymentType, paymentMethod, notes, date } = req.body;
     
+    console.log('Parsed data:', { userId, amount, paymentType, paymentMethod, notes, date });
+    
+    // Validate required fields
+    if (!amount || !paymentType || !paymentMethod) {
+      console.log('Validation failed - missing fields');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Missing required fields: amount, paymentType, and paymentMethod are required' 
+      });
+    }
+    
+    // Validate amount is a number
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      console.log('Validation failed - invalid amount:', amount);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Amount must be a positive number' 
+      });
+    }
+    
+    console.log('Looking for user with ID:', userId);
     const user = await User.findById(userId);
     if (!user) {
+      console.log('User not found');
       return res.status(404).json({ success: false, message: 'User not found' });
     }
     
+    console.log('Found user:', { id: user._id, name: `${user.firstName} ${user.lastName}` });
+    console.log('User paymentHistory exists:', !!user.paymentHistory);
+    console.log('User paymentHistory length:', user.paymentHistory ? user.paymentHistory.length : 'N/A');
+    
     // Initialize paymentHistory if it doesn't exist
     if (!user.paymentHistory) {
+      console.log('Initializing paymentHistory array');
       user.paymentHistory = [];
     }
     
     // Add payment record
     const payment = {
-      amount: parseFloat(amount),
+      amount: parsedAmount,
       paymentType,
       paymentMethod,
       notes: notes || '',
@@ -156,8 +188,32 @@ router.post('/:userId/add-payment', async (req, res) => {
       timestamp: new Date()
     };
     
+    console.log('Adding payment:', payment);
+    
     user.paymentHistory.push(payment);
+    console.log('Payment added to array, length now:', user.paymentHistory.length);
+    
+    console.log('Saving user...');
+    
+    // Fix any invalid preferredContacts values before saving
+    if (user.preferredContacts && user.preferredContacts.length > 0) {
+      const validContacts = ['email', 'phone', 'text'];
+      user.preferredContacts = user.preferredContacts.filter(contact => 
+        validContacts.includes(contact)
+      );
+      
+      // If no valid contacts remain, set default
+      if (user.preferredContacts.length === 0) {
+        user.preferredContacts = ['email'];
+      }
+      
+      console.log('Fixed preferredContacts:', user.preferredContacts);
+    }
+    
     await user.save();
+    
+    console.log('Payment saved successfully');
+    console.log('=== PAYMENT DEBUG END ===');
     
     res.json({ 
       success: true, 
@@ -171,8 +227,18 @@ router.post('/:userId/add-payment', async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('=== PAYMENT ERROR ===');
     console.error('Error adding payment:', error);
-    res.status(500).json({ success: false, message: 'Error adding payment' });
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('=== END PAYMENT ERROR ===');
+    
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error adding payment',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
@@ -329,6 +395,21 @@ router.post('/test-pin', async (req, res) => {
       message: 'Error testing PIN',
       error: error.message
     });
+  }
+});
+
+// Test endpoint to verify server is working
+router.get('/test-payment-endpoint', async (req, res) => {
+  try {
+    console.log('🎯 TEST PAYMENT ENDPOINT HIT');
+    res.json({ 
+      success: true, 
+      message: 'Payment endpoint is working',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Test endpoint error:', error);
+    res.status(500).json({ success: false, message: 'Test endpoint error' });
   }
 });
 

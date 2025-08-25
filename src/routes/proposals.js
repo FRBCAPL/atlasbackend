@@ -3,6 +3,9 @@ import * as proposalController from '../controllers/proposalController.js';
 
 const router = express.Router();
 
+// General GET route for all proposals (what the tests expect)
+router.get('/', proposalController.getAllProposals);
+
 router.get('/by-name', proposalController.getByReceiver);
 router.get('/by-sender', proposalController.getBySender);
 router.post('/', proposalController.create);

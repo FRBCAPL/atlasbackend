@@ -15,6 +15,7 @@ import authRoutes from './auth.js';
 import locationRoutes from './locations.js';
 import paymentConfigRoutes from './paymentConfig.js';
 import divisionConfigRoutes from './divisionConfig.js';
+import paymentRoutes from './payments.js';
 
 // Platform admin routes
 import platformAdminRoutes from './platformAdmin.js';
@@ -34,6 +35,7 @@ router.use('/auth', authRoutes);
 router.use('/locations', locationRoutes);
 router.use('/payment-config', paymentConfigRoutes);
 router.use('/division-config', divisionConfigRoutes);
+router.use('/payments', paymentRoutes);
 
 // Platform admin routes
 router.use('/platform', platformAdminRoutes);

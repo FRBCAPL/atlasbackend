@@ -45,8 +45,12 @@ export const searchUsers = async (req, res) => {
     }
     
     const users = await User.find(query)
-      .select('firstName lastName email phone locations availability preferredContacts division divisions isApproved')
+      .select('firstName lastName email phone locations availability preferredContacts division divisions isApproved paymentHistory penalties')
       .lean();
+    
+    console.log('🔍 Backend: searchUsers returning', users.length, 'users');
+    console.log('🔍 Backend: First user keys:', users.length > 0 ? Object.keys(users[0]) : 'No users');
+    console.log('🔍 Backend: Users with paymentHistory:', users.filter(u => u.paymentHistory && u.paymentHistory.length > 0).length);
     
     res.json({
       success: true,

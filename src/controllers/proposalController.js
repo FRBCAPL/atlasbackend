@@ -372,3 +372,36 @@ export const remove = async (req, res) => {
     res.status(500).json({ error: 'Failed to delete proposal' });
   }
 };
+
+// General GET route for all proposals (what the tests expect)
+export const getAllProposals = async (req, res) => {
+  try {
+    const { division, status, completed, phase, limit } = req.query;
+    const filter = {};
+    
+    if (division) {
+      filter.divisions = { $elemMatch: { $regex: `^${division}$`, $options: 'i' } };
+    }
+    if (status) {
+      filter.status = status;
+    }
+    if (typeof completed !== 'undefined') {
+      if (completed === 'true' || completed === true) filter.completed = true;
+      if (completed === 'false' || completed === false) filter.completed = false;
+    }
+    if (phase) {
+      filter.phase = phase;
+    }
+
+    const max = Math.min(parseInt(limit || '500', 10) || 500, 2000);
+    const results = await Proposal.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(max)
+      .lean();
+    
+    res.json(results);
+  } catch (err) {
+    console.error('Error getting all proposals:', err);
+    res.status(500).json({ error: 'Failed to fetch proposals' });
+  }
+};

@@ -1,7 +1,7 @@
 import { fetchSheetData } from './fetchSheetData.js';
 import User from '../models/User.js';
 
-const sheetID = "1tvMgMHsRwQxsR6lMNlSnztmwpK7fhZeNEyqjTqmRFRc";
+const sheetID = process.env.GOOGLE_SHEETS_ID || "1tvMgMHsRwQxsR6lMNlSnztmwpK7fhZeNEyqjTqmRFRc";
 const pinSheetName = "BCAPL SIGNUP";
 
 async function syncSheetUsersToMongo() {

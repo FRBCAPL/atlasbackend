@@ -613,4 +613,43 @@ export const validateRematch = async (req, res) => {
     console.error('Error validating rematch:', error);
     res.status(500).json({ error: 'Failed to validate rematch' });
   }
+};
+
+/**
+ * Get pending challenges for a player in a specific ladder
+ */
+export const getPendingChallenges = async (req, res) => {
+  try {
+    const { playerName, ladder } = req.params;
+    
+    if (!playerName || !ladder) {
+      return res.status(400).json({ 
+        error: 'Missing required parameters: playerName, ladder' 
+      });
+    }
+    
+    const Proposal = (await import('../models/Proposal.js')).default;
+    
+    // Find challenges where the player is involved and the match hasn't been reported yet
+    const pendingChallenges = await Proposal.find({
+      $or: [
+        { senderName: playerName },
+        { receiverName: playerName }
+      ],
+      divisions: ladder,
+      status: 'accepted',
+      'matchResult.completed': { $ne: true }, // Match not yet reported
+      completed: false
+    }).sort({ createdAt: -1 });
+    
+    res.json({
+      success: true,
+      challenges: pendingChallenges,
+      count: pendingChallenges.length
+    });
+    
+  } catch (error) {
+    console.error('Error fetching pending challenges:', error);
+    res.status(500).json({ error: 'Failed to fetch pending challenges' });
+  }
 }; 

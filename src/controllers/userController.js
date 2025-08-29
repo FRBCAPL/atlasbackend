@@ -2,11 +2,126 @@ import User from '../models/User.js';
 import PendingRegistration from '../models/PendingRegistration.js';
 import syncSheetUsersToMongo from '../utils/syncUsersFromSheet.js';
 import bcrypt from 'bcryptjs';
+import LadderPlayer from '../models/LadderPlayer.js';
 
 export const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find({}).lean();
-    res.json(users);
+    // Fetch all league players
+    const leaguePlayers = await User.find({}).lean();
+    
+    // Fetch all ladder players
+    const ladderPlayers = await LadderPlayer.find({}).lean();
+    
+    // Create maps to track players by email and by name
+    const playerMapByEmail = new Map();
+    const playerMapByName = new Map();
+    
+         // Add league players
+     leaguePlayers.forEach(player => {
+      
+      const playerData = {
+        ...player,
+        system: 'league',
+        isLeaguePlayer: true,
+        isLadderPlayer: false
+      };
+      
+      // Store by email if available
+      if (player.email) {
+        playerMapByEmail.set(player.email, playerData);
+      }
+      
+      // Store by name for matching players without emails
+      const nameKey = `${player.firstName?.toLowerCase()}-${player.lastName?.toLowerCase()}`;
+      playerMapByName.set(nameKey, playerData);
+    });
+    
+              // Add ladder players and check for duplicates
+     ladderPlayers.forEach(player => {
+       
+       const nameKey = `${player.firstName?.toLowerCase()}-${player.lastName?.toLowerCase()}`;
+       const ladderInfo = {
+         ladderName: player.ladderName,
+         position: player.position,
+         fargoRate: player.fargoRate,
+         isActive: player.isActive
+       };
+       
+               // Check if player has a valid email (not undefined, null, or empty)
+        const hasValidEmail = player.email && 
+                             player.email !== 'undefined' && 
+                             player.email !== 'null' && 
+                             player.email.trim() !== '';
+
+        // Check if player exists in both systems by email
+        if (hasValidEmail && playerMapByEmail.has(player.email)) {
+          const existingPlayer = playerMapByEmail.get(player.email);
+          playerMapByEmail.set(player.email, {
+            ...existingPlayer,
+            system: 'both',
+            isLeaguePlayer: true,
+            isLadderPlayer: true,
+            ladderInfo
+          });
+        }
+        // Check if player exists in both systems by name (for players without emails)
+        else if (playerMapByName.has(nameKey)) {
+          const existingPlayer = playerMapByName.get(nameKey);
+          
+          // Update the existing player with ladder info
+          const updatedPlayer = {
+            ...existingPlayer,
+            system: 'both',
+            isLeaguePlayer: true,
+            isLadderPlayer: true,
+            ladderInfo
+          };
+          
+          // Update both maps
+          if (existingPlayer.email) {
+            playerMapByEmail.set(existingPlayer.email, updatedPlayer);
+          }
+          playerMapByName.set(nameKey, updatedPlayer);
+                 } else {
+            // Player only in ladder
+            const ladderPlayerData = {
+              ...player,
+              system: 'ladder',
+              isLeaguePlayer: false,
+              isLadderPlayer: true,
+              // For ladder-only players, ladder info is directly on the object
+              ladderName: player.ladderName,
+              position: player.position,
+              fargoRate: player.fargoRate,
+              isActive: player.isActive
+            };
+            
+            // Only add to email map if they have a valid email
+            if (hasValidEmail) {
+              playerMapByEmail.set(player.email, ladderPlayerData);
+            }
+            playerMapByName.set(nameKey, ladderPlayerData);
+          }
+     });
+    
+         // Combine all players from both maps
+     const allPlayers = Array.from(playerMapByEmail.values());
+     
+     // Add players that only exist in the name map (players without emails)
+     playerMapByName.forEach((player, nameKey) => {
+       if (!player.email || !playerMapByEmail.has(player.email)) {
+         allPlayers.push(player);
+       }
+     });
+    
+    // Sort players alphabetically by first name
+    allPlayers.sort((a, b) => {
+      const firstNameA = (a.firstName || '').toLowerCase();
+      const firstNameB = (b.firstName || '').toLowerCase();
+      return firstNameA.localeCompare(firstNameB);
+    });
+    
+    res.json(allPlayers);
   } catch (err) {
     console.error('Error fetching all users:', err);
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -48,9 +163,7 @@ export const searchUsers = async (req, res) => {
       .select('firstName lastName email phone locations availability preferredContacts division divisions isApproved paymentHistory penalties')
       .lean();
     
-    console.log('🔍 Backend: searchUsers returning', users.length, 'users');
-    console.log('🔍 Backend: First user keys:', users.length > 0 ? Object.keys(users[0]) : 'No users');
-    console.log('🔍 Backend: Users with paymentHistory:', users.filter(u => u.paymentHistory && u.paymentHistory.length > 0).length);
+
     
     res.json({
       success: true,
@@ -358,5 +471,207 @@ export const updatePreferences = async (req, res) => {
   } catch (err) {
     console.error('Error updating user preferences:', err);
     res.status(500).json({ error: 'Failed to update preferences' });
+  }
+};
+
+// Create new user (admin only)
+export const createUser = async (req, res) => {
+  try {
+    const {
+      firstName,
+      lastName,
+      email,
+      phone,
+      pin,
+      division,
+      locations,
+      isApproved,
+      isActive
+    } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'User with this email already exists' 
+      });
+    }
+
+    // Create new user
+    const newUser = new User({
+      firstName,
+      lastName,
+      email: email.toLowerCase(),
+      phone,
+      pin,
+      division,
+      locations,
+      isApproved: isApproved !== undefined ? isApproved : true,
+      isActive: isActive !== undefined ? isActive : true,
+      approvalDate: new Date(),
+      approvedBy: 'admin'
+    });
+
+    await newUser.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'User created successfully',
+      user: {
+        _id: newUser._id,
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        email: newUser.email,
+        pin: newUser.pin
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating user'
+    });
+  }
+};
+
+// Update existing user (admin only)
+export const updateUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const updateData = req.body;
+
+    // Remove fields that shouldn't be updated via this endpoint
+    delete updateData._id;
+    delete updateData.__v;
+    delete updateData.pin; // Don't allow PIN updates via this endpoint
+    delete updateData.isAdmin; // Don't allow admin status updates via this endpoint
+
+    // First, try to find the user in the User collection
+    let user = await User.findById(userId);
+    let isLadderPlayer = false;
+
+    // If not found in User collection, check LadderPlayer collection
+    if (!user) {
+      const ladderPlayer = await LadderPlayer.findById(userId);
+      if (ladderPlayer) {
+        isLadderPlayer = true;
+        user = ladderPlayer;
+      } else {
+        return res.status(404).json({
+          success: false,
+          message: 'Player not found in either User or LadderPlayer collections'
+        });
+      }
+    }
+
+    // If updating email, check if it already exists in User collection
+    if (updateData.email && updateData.email.trim() !== '') {
+      const existingUser = await User.findOne({ 
+        email: updateData.email.toLowerCase(),
+        _id: { $ne: userId } // Exclude current user
+      });
+      
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: `Email "${updateData.email}" is already in use by another player`
+        });
+      }
+      
+      // Convert email to lowercase
+      updateData.email = updateData.email.toLowerCase();
+    }
+
+    let updatedUser;
+    if (isLadderPlayer) {
+      // Update LadderPlayer
+      updatedUser = await LadderPlayer.findByIdAndUpdate(
+        userId,
+        { 
+          ...updateData,
+          lastProfileUpdate: new Date()
+        },
+        { new: true, runValidators: false }
+      );
+    } else {
+      // Update User
+      updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { 
+          ...updateData,
+          lastProfileUpdate: new Date()
+        },
+        { new: true, runValidators: false } // Disable validation to avoid preferredContacts issues
+      );
+    }
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'Player not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Player updated successfully',
+      user: {
+        _id: updatedUser._id,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        email: updatedUser.email,
+        phone: updatedUser.phone,
+        isApproved: updatedUser.isApproved,
+        isActive: updatedUser.isActive,
+        divisions: updatedUser.divisions,
+        locations: updatedUser.locations,
+        notes: updatedUser.notes
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating user:', error);
+    
+    // Provide more specific error messages
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email address is already in use by another player'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Error updating player'
+    });
+  }
+};
+
+// Delete user (admin only)
+export const deleteUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findByIdAndDelete(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'User deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting user'
+    });
   }
 }; 

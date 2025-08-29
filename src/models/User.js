@@ -87,6 +87,12 @@ const userSchema = new mongoose.Schema({
   lastLogin: { type: Date },
   lastProfileUpdate: { type: Date },
   
+  // Account claiming fields
+  isPendingApproval: { type: Boolean, default: false },
+  claimMessage: { type: String, default: '' },
+  ladderPlayerId: { type: mongoose.Schema.Types.ObjectId, ref: 'LadderPlayer' },
+  approvedAt: { type: Date },
+  
   // Match Statistics
   totalMatches: { type: Number, default: 0 },
   wins: { type: Number, default: 0 },
@@ -107,17 +113,9 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Hash PIN before saving
-userSchema.pre('save', async function(next) {
-  if (this.isModified('pin')) {
-    this.pin = await bcrypt.hash(this.pin, 10);
-  }
-  next();
-});
-
-// Method to compare PIN
+// Method to compare PIN (plain text comparison)
 userSchema.methods.comparePin = async function(candidatePin) {
-  return bcrypt.compare(candidatePin, this.pin);
+  return this.pin === candidatePin;
 };
 
 // Method to get full name

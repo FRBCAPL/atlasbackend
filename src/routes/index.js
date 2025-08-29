@@ -17,8 +17,14 @@ import paymentConfigRoutes from './paymentConfig.js';
 import divisionConfigRoutes from './divisionConfig.js';
 import paymentRoutes from './payments.js';
 
+// Ladder routes
+import ladderRoutes from './ladder.js';
+
 // Platform admin routes
 import platformAdminRoutes from './platformAdmin.js';
+
+// Monetization routes
+import monetizationRoutes from './monetization.js';
 
 const router = express.Router();
 
@@ -37,8 +43,14 @@ router.use('/payment-config', paymentConfigRoutes);
 router.use('/division-config', divisionConfigRoutes);
 router.use('/payments', paymentRoutes);
 
+// Ladder routes
+router.use('/ladder', ladderRoutes);
+
 // Platform admin routes
 router.use('/platform', platformAdminRoutes);
+
+// Monetization routes
+router.use('/monetization', monetizationRoutes);
 
 // Simple test route
 router.get('/test', (req, res) => {

@@ -1,0 +1,1337 @@
+import express from 'express';
+import Ladder from '../models/Ladder.js';
+import LadderPlayer from '../models/LadderPlayer.js';
+import LadderChallenge from '../models/LadderChallenge.js';
+import LadderMatch from '../models/LadderMatch.js';
+import LadderSignupApplication from '../models/LadderSignupApplication.js';
+import User from '../models/User.js'; // Added import for User
+import bcrypt from 'bcryptjs'; // Added import for bcrypt
+import PlayerRecognitionService from '../services/PlayerRecognitionService.js';
+// Note: EmailJS is client-side only, so we'll handle email sending in the frontend
+// For now, we'll just return the credentials and let the frontend handle the email
+
+const router = express.Router();
+
+// Test route to check if ladder routes are working
+router.get('/test', (req, res) => {
+  res.json({ 
+    message: 'Ladder API is working!',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Basic challenges endpoint for testing
+router.get('/challenges', (req, res) => {
+  res.json({ 
+    message: 'Ladder Challenges API is working!',
+    endpoints: [
+      '/player/:email/challenges',
+      '/create',
+      '/accept/:challengeId',
+      '/decline/:challengeId'
+    ]
+  });
+});
+
+// Get all ladders
+router.get('/ladders', async (req, res) => {
+  try {
+    const ladders = await Ladder.getActiveLadders();
+    res.json(ladders);
+  } catch (error) {
+    console.error('Error fetching ladders:', error);
+    res.status(500).json({ error: 'Failed to fetch ladders' });
+  }
+});
+
+// Get all players across all ladders
+router.get('/players', async (req, res) => {
+  try {
+    console.log('Fetching all ladder players across all ladders');
+    
+    const players = await LadderPlayer.getAllPlayers();
+    console.log(`Found ${players.length} total players across all ladders`);
+    
+    res.json(players);
+  } catch (error) {
+    console.error('Error fetching all ladder players:', error);
+    res.status(500).json({ error: 'Failed to fetch all ladder players', details: error.message });
+  }
+});
+
+// Get players by ladder
+router.get('/ladders/:ladderName/players', async (req, res) => {
+  try {
+    const { ladderName } = req.params;
+    console.log('Fetching players for ladder:', ladderName);
+    
+    const players = await LadderPlayer.getPlayersByLadder(ladderName);
+    console.log(`Found ${players.length} players for ladder ${ladderName}`);
+    
+    res.json(players);
+  } catch (error) {
+    console.error('Error fetching ladder players:', error);
+    res.status(500).json({ error: 'Failed to fetch ladder players', details: error.message });
+  }
+});
+
+// Get player by email
+router.get('/player/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const player = await LadderPlayer.getPlayerByEmail(email);
+    
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    
+    res.json(player);
+  } catch (error) {
+    console.error('Error fetching player:', error);
+    res.status(500).json({ error: 'Failed to fetch player' });
+  }
+});
+
+// Signup for ladder (new application)
+router.post('/signup', async (req, res) => {
+  try {
+    const { firstName, lastName, email, phone, fargoRate, experience, currentLeague, currentRanking } = req.body;
+    
+    // Validate required fields
+    if (!firstName || !lastName || !email) {
+      return res.status(400).json({ error: 'First name, last name, and email are required' });
+    }
+    
+    // Check if player already exists
+    const existingPlayer = await LadderPlayer.findOne({ email });
+    if (existingPlayer) {
+      return res.status(400).json({ error: 'A player with this email already exists' });
+    }
+    
+    // Create a new ladder signup application
+    const signupApplication = new LadderSignupApplication({
+      firstName,
+      lastName,
+      email,
+      phone: phone || '',
+      fargoRate: fargoRate || null,
+      experience: experience || 'beginner',
+      currentLeague: currentLeague || '',
+      currentRanking: currentRanking || '',
+      status: 'pending',
+      submittedAt: new Date()
+    });
+    
+    await signupApplication.save();
+    
+    // Send notification email (you can implement this later)
+    // await sendSignupNotification(signupApplication);
+    
+    res.status(201).json({ 
+      message: 'Signup application submitted successfully',
+      applicationId: signupApplication._id
+    });
+  } catch (error) {
+    console.error('Error submitting signup application:', error);
+    res.status(500).json({ error: 'Failed to submit signup application' });
+  }
+});
+
+// Register new player
+router.post('/player/register', async (req, res) => {
+  try {
+    const { firstName, lastName, email, pin, fargoRate } = req.body;
+    
+    // Check if player already exists
+    const existingPlayer = await LadderPlayer.getPlayerByEmail(email);
+    if (existingPlayer) {
+      return res.status(400).json({ error: 'Player already exists' });
+    }
+    
+    // Determine ladder based on FargoRate
+    let ladderName;
+    if (fargoRate <= 499) {
+      ladderName = '499-under';
+    } else if (fargoRate >= 500 && fargoRate <= 549) {
+      ladderName = '500-549';
+    } else if (fargoRate >= 550) {
+      ladderName = '550-plus';
+    } else {
+      return res.status(400).json({ error: 'Invalid FargoRate' });
+    }
+    
+    // Get ladder
+    const ladder = await Ladder.getLadderByRating(fargoRate);
+    if (!ladder) {
+      return res.status(400).json({ error: 'Invalid FargoRate' });
+    }
+    
+    // Find next available position
+    const playersInLadder = await LadderPlayer.getPlayersByLadder(ladderName);
+    const nextPosition = playersInLadder.length + 1;
+    
+    // Create player
+    const player = new LadderPlayer({
+      firstName,
+      lastName,
+      email,
+      pin,
+      fargoRate,
+      ladderId: ladder._id,
+      ladderName,
+      position: nextPosition
+    });
+    
+    await player.save();
+    
+    res.status(201).json(player);
+  } catch (error) {
+    console.error('Error registering player:', error);
+    res.status(500).json({ error: 'Failed to register player' });
+  }
+});
+
+// Get eligible challenge targets for a player
+router.get('/player/:email/challenge-targets', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const player = await LadderPlayer.getPlayerByEmail(email);
+    
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    
+    const challengeTargets = await player.getEligibleChallengeTargets();
+    res.json(challengeTargets);
+  } catch (error) {
+    console.error('Error fetching challenge targets:', error);
+    res.status(500).json({ error: 'Failed to fetch challenge targets' });
+  }
+});
+
+// Get eligible smackdown targets for a player
+router.get('/player/:email/smackdown-targets', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const player = await LadderPlayer.getPlayerByEmail(email);
+    
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    
+    const smackdownTargets = await player.getEligibleSmackdownTargets();
+    res.json(smackdownTargets);
+  } catch (error) {
+    console.error('Error fetching smackdown targets:', error);
+    res.status(500).json({ error: 'Failed to fetch smackdown targets' });
+  }
+});
+
+// Get eligible ladder jump targets for a player
+router.get('/player/:email/ladder-jump-targets', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const player = await LadderPlayer.getPlayerByEmail(email);
+    
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    
+    if (!player.isEligibleForLadderJump()) {
+      return res.status(400).json({ error: 'Player not eligible for ladder jump' });
+    }
+    
+    const ladderJumpTargets = await player.getEligibleLadderJumpTargets();
+    res.json(ladderJumpTargets);
+  } catch (error) {
+    console.error('Error fetching ladder jump targets:', error);
+    res.status(500).json({ error: 'Failed to fetch ladder jump targets' });
+  }
+});
+
+// Create a challenge
+router.post('/challenge', async (req, res) => {
+  try {
+    const { 
+      challengerEmail, 
+      defenderEmail, 
+      challengeType, 
+      entryFee, 
+      raceLength, 
+      gameType, 
+      tableSize, 
+      preferredDates,
+      postContent 
+    } = req.body;
+    
+    // Get players
+    const challenger = await LadderPlayer.getPlayerByEmail(challengerEmail);
+    const defender = await LadderPlayer.getPlayerByEmail(defenderEmail);
+    
+    if (!challenger || !defender) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    
+    // Validate challenge eligibility
+    if (!challenger.canMakeChallenges()) {
+      return res.status(400).json({ error: 'Challenger cannot make challenges' });
+    }
+    
+    if (!defender.canBeChallenged()) {
+      return res.status(400).json({ error: 'Defender cannot be challenged' });
+    }
+    
+    // Set deadline (3 days from now)
+    const deadline = new Date();
+    deadline.setDate(deadline.getDate() + 3);
+    
+    // Create challenge
+    const challenge = new LadderChallenge({
+      challengeType,
+      challenger: challenger._id,
+      defender: defender._id,
+      status: 'pending',
+      matchDetails: {
+        entryFee,
+        raceLength,
+        gameType,
+        tableSize,
+        preferredDates
+      },
+      challengePost: {
+        postContent
+      },
+      deadline
+    });
+    
+    await challenge.save();
+    
+    // Add challenge to players' active challenges
+    challenger.activeChallenges.push({
+      challengeId: challenge._id,
+      type: challengeType,
+      status: 'pending'
+    });
+    
+    defender.activeChallenges.push({
+      challengeId: challenge._id,
+      type: challengeType,
+      status: 'pending'
+    });
+    
+    await challenger.save();
+    await defender.save();
+    
+    res.status(201).json(challenge);
+  } catch (error) {
+    console.error('Error creating challenge:', error);
+    res.status(500).json({ error: 'Failed to create challenge' });
+  }
+});
+
+// Get active challenges for a player
+router.get('/player/:email/challenges', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const player = await LadderPlayer.getPlayerByEmail(email);
+    
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    
+    const challenges = await LadderChallenge.getActiveChallengesForPlayer(player._id);
+    res.json(challenges);
+  } catch (error) {
+    console.error('Error fetching challenges:', error);
+    res.status(500).json({ error: 'Failed to fetch challenges' });
+  }
+});
+
+// Accept a challenge
+router.post('/challenge/:challengeId/accept', async (req, res) => {
+  try {
+    const { challengeId } = req.params;
+    const { responseContent } = req.body;
+    
+    const challenge = await LadderChallenge.findById(challengeId)
+      .populate('challenger defender');
+    
+    if (!challenge) {
+      return res.status(404).json({ error: 'Challenge not found' });
+    }
+    
+    if (!challenge.canBeAccepted()) {
+      return res.status(400).json({ error: 'Challenge cannot be accepted' });
+    }
+    
+    challenge.status = 'accepted';
+    challenge.acceptance = {
+      acceptedAt: new Date(),
+      acceptedBy: challenge.defender._id,
+      responseContent
+    };
+    
+    await challenge.save();
+    
+    res.json(challenge);
+  } catch (error) {
+    console.error('Error accepting challenge:', error);
+    res.status(500).json({ error: 'Failed to accept challenge' });
+  }
+});
+
+// Get recent matches
+router.get('/matches/recent', async (req, res) => {
+  try {
+    const { limit = 20 } = req.query;
+    const matches = await LadderMatch.getRecentMatches(parseInt(limit));
+    res.json(matches);
+  } catch (error) {
+    console.error('Error fetching recent matches:', error);
+    res.status(500).json({ error: 'Failed to fetch recent matches' });
+  }
+});
+
+// Get matches for a player
+router.get('/player/:email/matches', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const { limit = 10 } = req.query;
+    
+    const player = await LadderPlayer.getPlayerByEmail(email);
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    
+    const matches = await LadderMatch.getMatchesForPlayer(player._id, parseInt(limit));
+    res.json(matches);
+  } catch (error) {
+    console.error('Error fetching player matches:', error);
+    res.status(500).json({ error: 'Failed to fetch player matches' });
+  }
+});
+
+// Import ladder data from CSV/JSON
+router.post('/import', async (req, res) => {
+  try {
+    const { ladderData, ladderName } = req.body;
+    
+    if (!ladderData || !Array.isArray(ladderData)) {
+      return res.status(400).json({ error: 'Invalid ladder data format' });
+    }
+    
+    if (!ladderName || !['499-under', '500-549', '550-plus'].includes(ladderName)) {
+      return res.status(400).json({ error: 'Invalid ladder name' });
+    }
+    
+    // Get the ladder
+    const ladder = await Ladder.findOne({ name: ladderName });
+    if (!ladder) {
+      return res.status(400).json({ error: 'Ladder not found' });
+    }
+    
+    const results = {
+      imported: 0,
+      skipped: 0,
+      errors: []
+    };
+    
+    // Process each player
+    for (let i = 0; i < ladderData.length; i++) {
+      const playerData = ladderData[i];
+      
+      try {
+        // Check if player already exists
+        const existingPlayer = await LadderPlayer.getPlayerByEmail(playerData.email);
+        if (existingPlayer) {
+          results.skipped++;
+          continue;
+        }
+        
+                 // Determine ladder based on FargoRate
+         let playerLadderName;
+         const playerFargoRate = playerData.fargoRate || 450;
+         
+         if (playerFargoRate <= 499) {
+           playerLadderName = '499-under';
+         } else if (playerFargoRate >= 500 && playerFargoRate <= 549) {
+           playerLadderName = '500-549';
+         } else if (playerFargoRate >= 550) {
+           playerLadderName = '550-plus';
+         } else {
+           playerLadderName = ladderName; // Fallback to selected ladder
+         }
+         
+         // Get the correct ladder for this player
+         const playerLadder = await Ladder.findOne({ name: playerLadderName });
+         if (!playerLadder) {
+           results.errors.push({
+             row: i + 1,
+             data: playerData,
+             error: `Ladder ${playerLadderName} not found`
+           });
+           continue;
+         }
+         
+         // Create new player
+         const player = new LadderPlayer({
+           firstName: playerData.firstName || playerData.name?.split(' ')[0] || 'Unknown',
+           lastName: playerData.lastName || playerData.name?.split(' ').slice(1).join(' ') || 'Player',
+           email: playerData.email,
+           pin: playerData.pin || '1234', // Default pin
+           fargoRate: playerFargoRate,
+           ladderId: playerLadder._id,
+           ladderName: playerLadderName,
+           position: playerData.position || (i + 1)
+         });
+        
+        await player.save();
+        results.imported++;
+        
+      } catch (error) {
+        results.errors.push({
+          row: i + 1,
+          data: playerData,
+          error: error.message
+        });
+      }
+    }
+    
+    res.json({
+      message: 'Import completed',
+      results
+    });
+    
+  } catch (error) {
+    console.error('Error importing ladder data:', error);
+    res.status(500).json({ error: 'Failed to import ladder data' });
+  }
+});
+
+// Bulk update ladder positions
+router.post('/update-positions', async (req, res) => {
+  try {
+    const { ladderName, positions } = req.body;
+    
+    if (!ladderName || !positions || !Array.isArray(positions)) {
+      return res.status(400).json({ error: 'Invalid data format' });
+    }
+    
+    const results = {
+      updated: 0,
+      errors: []
+    };
+    
+    for (const posData of positions) {
+      try {
+        const player = await LadderPlayer.findOne({
+          email: posData.email,
+          ladderName: ladderName
+        });
+        
+        if (player) {
+          player.position = posData.position;
+          await player.save();
+          results.updated++;
+        }
+      } catch (error) {
+        results.errors.push({
+          email: posData.email,
+          error: error.message
+        });
+      }
+    }
+    
+    res.json({
+      message: 'Positions updated',
+      results
+    });
+    
+  } catch (error) {
+    console.error('Error updating positions:', error);
+    res.status(500).json({ error: 'Failed to update positions' });
+  }
+});
+
+// Get ladder admin data
+router.get('/admin/:ladderName', async (req, res) => {
+  try {
+    const { ladderName } = req.params;
+    
+    const players = await LadderPlayer.find({ ladderName })
+      .sort({ position: 1 })
+      .select('firstName lastName email fargoRate position isActive immunityUntil');
+    
+    res.json(players);
+    
+  } catch (error) {
+    console.error('Error fetching ladder admin data:', error);
+    res.status(500).json({ error: 'Failed to fetch ladder admin data' });
+  }
+});
+
+// Player Recognition and Account Claiming Routes
+router.post('/recognize-player', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Check if player exists in league database
+    const leaguePlayer = await User.findOne({ email: email.toLowerCase() });
+    
+    // Check if player exists in ladder database
+    const ladderPlayer = await LadderPlayer.findOne({ email: email.toLowerCase() });
+    
+    const response = {
+      isLeaguePlayer: !!leaguePlayer,
+      isLadderPlayer: !!ladderPlayer,
+      needsAccountClaim: !ladderPlayer && leaguePlayer, // League player but no ladder account
+      playerInfo: null
+    };
+
+    if (leaguePlayer) {
+      response.playerInfo = {
+        firstName: leaguePlayer.firstName,
+        lastName: leaguePlayer.lastName,
+        email: leaguePlayer.email,
+        phone: leaguePlayer.phone,
+        divisions: leaguePlayer.divisions || []
+      };
+    }
+
+    if (ladderPlayer) {
+      response.ladderInfo = {
+        position: ladderPlayer.position,
+        fargoRate: ladderPlayer.fargoRate,
+        ladderName: ladderPlayer.ladderName,
+        isActive: ladderPlayer.isActive,
+        stats: {
+          wins: ladderPlayer.stats?.wins || 0,
+          losses: ladderPlayer.stats?.losses || 0
+        }
+      };
+    }
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error recognizing player:', error);
+    res.status(500).json({ error: 'Failed to recognize player' });
+  }
+});
+
+// Unified access endpoint - requires name AND email OR PIN
+router.post('/claim-account', async (req, res) => {
+  try {
+    const { firstName, lastName, email, pin } = req.body;
+    
+    // Validate required fields
+    if (!firstName || !lastName) {
+      return res.status(400).json({ error: 'First name and last name are required' });
+    }
+    
+    let leaguePlayer = null;
+    let ladderPlayer = null;
+    let playerEmail = null;
+
+    // Validate that at least one field is provided (email, PIN, or name-only for ladder players)
+    if (!email && !pin) {
+      // Check if this is a name-only ladder player
+      const nameOnlyLadderPlayer = await LadderPlayer.findOne({
+        firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+        lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+      });
+      
+      if (!nameOnlyLadderPlayer) {
+        return res.status(400).json({ error: 'Either email OR PIN is required, or player not found in ladder system' });
+      }
+      
+      // Found a ladder player with just name - require admin approval
+      return res.status(403).json({ 
+        error: 'Admin approval required',
+        requiresApproval: true,
+        playerFound: true,
+        playerInfo: {
+          firstName: nameOnlyLadderPlayer.firstName,
+          lastName: nameOnlyLadderPlayer.lastName,
+          position: nameOnlyLadderPlayer.position,
+          ladderName: nameOnlyLadderPlayer.ladderName,
+          fargoRate: nameOnlyLadderPlayer.fargoRate
+        },
+        message: 'Player found in ladder system but requires admin approval. Please submit an application with your email and phone number.'
+      });
+    }
+
+    // Search by email if provided
+    if (email) {
+      playerEmail = email.toLowerCase();
+      leaguePlayer = await User.findOne({ email: playerEmail });
+      ladderPlayer = await LadderPlayer.findOne({ email: playerEmail });
+    }
+
+    // Search by PIN if email not found or not provided
+    if (!leaguePlayer && !ladderPlayer && pin) {
+      // Search league players by PIN
+      const allLeaguePlayers = await User.find({});
+      for (const player of allLeaguePlayers) {
+        const isPinValid = await player.comparePin(pin);
+        if (isPinValid) {
+          leaguePlayer = player;
+          playerEmail = player.email;
+          break;
+        }
+      }
+
+      // Search ladder players by PIN
+      if (!ladderPlayer) {
+        const allLadderPlayers = await LadderPlayer.find({});
+        for (const player of allLadderPlayers) {
+          const isPinValid = await player.comparePin(pin);
+          if (isPinValid) {
+            ladderPlayer = player;
+            playerEmail = player.email;
+            break;
+          }
+        }
+      }
+    }
+
+    // Verify name matches for any found player
+    const verifyNameMatch = (player) => {
+      if (!player) return false;
+      const playerFirstName = player.firstName?.toLowerCase().trim();
+      const playerLastName = player.lastName?.toLowerCase().trim();
+      const inputFirstName = firstName.toLowerCase().trim();
+      const inputLastName = lastName.toLowerCase().trim();
+      
+      return playerFirstName === inputFirstName && playerLastName === inputLastName;
+    };
+
+    // Check if found players match the provided name
+    if (leaguePlayer && !verifyNameMatch(leaguePlayer)) {
+      leaguePlayer = null;
+    }
+    
+    if (ladderPlayer && !verifyNameMatch(ladderPlayer)) {
+      ladderPlayer = null;
+    }
+
+    // If no player found, return error
+    if (!leaguePlayer && !ladderPlayer) {
+      return res.status(404).json({ error: 'No player found with the provided name and email/PIN combination. Please verify your information and try again.' });
+    }
+
+    // Determine player type and return unified response
+    const response = {
+      success: true,
+      playerType: 'unknown',
+      playerInfo: null,
+      leagueInfo: null,
+      ladderInfo: null,
+      accessGranted: true // Grant immediate access
+    };
+
+    // Set player info from whichever system found the player
+    if (leaguePlayer) {
+      response.playerInfo = {
+        firstName: leaguePlayer.firstName,
+        lastName: leaguePlayer.lastName,
+        email: leaguePlayer.email,
+        phone: leaguePlayer.phone
+      };
+      response.leagueInfo = {
+        firstName: leaguePlayer.firstName,
+        lastName: leaguePlayer.lastName,
+        email: leaguePlayer.email,
+        phone: leaguePlayer.phone,
+        divisions: leaguePlayer.divisions || []
+      };
+    }
+
+    if (ladderPlayer) {
+      response.playerInfo = {
+        firstName: ladderPlayer.firstName,
+        lastName: ladderPlayer.lastName,
+        email: ladderPlayer.email
+      };
+      response.ladderInfo = {
+        firstName: ladderPlayer.firstName,
+        lastName: ladderPlayer.lastName,
+        position: ladderPlayer.position,
+        fargoRate: ladderPlayer.fargoRate,
+        ladderName: ladderPlayer.ladderName,
+        isActive: ladderPlayer.isActive,
+        immunityUntil: ladderPlayer.immunityUntil,
+        stats: {
+          wins: ladderPlayer.wins || 0,
+          losses: ladderPlayer.losses || 0
+        }
+      };
+    }
+
+    // Determine player type and set appropriate message
+    if (leaguePlayer && ladderPlayer) {
+      response.playerType = 'both';
+      response.message = 'League & Ladder Player - Access Granted';
+    } else if (leaguePlayer) {
+      response.playerType = 'league';
+      response.message = 'League Player - Access Granted';
+    } else if (ladderPlayer) {
+      response.playerType = 'ladder';
+      response.message = 'Ladder Player - Access Granted';
+    }
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error accessing account:', error);
+    res.status(500).json({ error: 'Failed to access account' });
+  }
+});
+
+// Apply for ladder account (for non-league players)
+router.post('/apply-for-ladder', async (req, res) => {
+  try {
+    const { firstName, lastName, email, phone, fargoRate, experience, currentLeague, currentRanking } = req.body;
+    
+    if (!firstName || !lastName || !email) {
+      return res.status(400).json({ error: 'First name, last name, and email are required' });
+    }
+
+    // Check if player already exists in ladder
+    const existingLadderPlayer = await LadderPlayer.findOne({ email: email.toLowerCase() });
+    if (existingLadderPlayer) {
+      return res.status(400).json({ error: 'A player with this email already exists in the ladder' });
+    }
+
+    // Check if player already has a pending application
+    const existingApplication = await LadderSignupApplication.findOne({ email: email.toLowerCase() });
+    if (existingApplication) {
+      return res.status(400).json({ error: 'You already have a pending application' });
+    }
+
+    // Create a new ladder signup application
+    const signupApplication = new LadderSignupApplication({
+      firstName,
+      lastName,
+      email,
+      phone: phone || '',
+      fargoRate: fargoRate || null,
+      experience: experience || 'beginner',
+      currentLeague: currentLeague || '',
+      currentRanking: currentRanking || '',
+      status: 'pending',
+      submittedAt: new Date()
+    });
+    
+    await signupApplication.save();
+    
+    res.json({
+      success: true,
+      message: 'Application submitted successfully. An admin will review your application and contact you.',
+      applicationId: signupApplication._id
+    });
+  } catch (error) {
+    console.error('Error submitting ladder application:', error);
+    res.status(500).json({ error: 'Failed to submit application' });
+  }
+});
+
+// Apply for existing ladder player account (for players without email/PIN)
+router.post('/apply-for-existing-ladder-account', async (req, res) => {
+  try {
+    const { firstName, lastName, email, phone } = req.body;
+    
+    if (!firstName || !lastName || !email) {
+      return res.status(400).json({ error: 'First name, last name, and email are required' });
+    }
+
+    // Check if player exists in ladder system
+    const existingLadderPlayer = await LadderPlayer.findOne({
+      firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+      lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+    });
+
+    if (!existingLadderPlayer) {
+      return res.status(404).json({ error: 'Player not found in ladder system. Please verify your name or contact an admin.' });
+    }
+
+    // Check if player already has an email (they shouldn't need approval)
+    if (existingLadderPlayer.email) {
+      return res.status(400).json({ error: 'This player already has an email address. Please use the regular login process.' });
+    }
+
+    // Check if player already has a pending application
+    const existingApplication = await LadderSignupApplication.findOne({ 
+      firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+      lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+    });
+    
+    if (existingApplication) {
+      return res.status(400).json({ error: 'You already have a pending application for this account.' });
+    }
+
+         // Create a new application for existing ladder player
+     const signupApplication = new LadderSignupApplication({
+       firstName,
+       lastName,
+       email,
+       phone: phone || '',
+       fargoRate: existingLadderPlayer.fargoRate,
+       experience: 'expert', // Use 'expert' for existing players
+       currentLeague: '',
+       currentRanking: '',
+       status: 'pending',
+       submittedAt: new Date(),
+       notes: `Existing ladder player - Position ${existingLadderPlayer.position} in ${existingLadderPlayer.ladderName} ladder`
+     });
+    
+    await signupApplication.save();
+    
+    res.json({
+      success: true,
+      message: 'Application submitted successfully for your existing ladder account. An admin will review and approve your access.',
+      applicationId: signupApplication._id,
+      playerInfo: {
+        position: existingLadderPlayer.position,
+        ladderName: existingLadderPlayer.ladderName,
+        fargoRate: existingLadderPlayer.fargoRate
+      }
+    });
+  } catch (error) {
+    console.error('Error submitting existing ladder player application:', error);
+    res.status(500).json({ error: 'Failed to submit application' });
+  }
+});
+
+// Get player's unified status across both systems
+router.get('/player-status/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    // Check if player exists in league database
+    const leaguePlayer = await User.findOne({ email: email.toLowerCase() });
+    
+    // Check if player exists in ladder database
+    const ladderPlayer = await LadderPlayer.findOne({ email: email.toLowerCase() });
+    
+    const response = {
+      isLeaguePlayer: !!leaguePlayer,
+      isLadderPlayer: !!ladderPlayer,
+      needsAccountClaim: !ladderPlayer && leaguePlayer, // League player but no ladder account
+      playerInfo: null,
+      leagueInfo: null,
+      ladderInfo: null
+    };
+
+    if (leaguePlayer) {
+      response.leagueInfo = {
+        firstName: leaguePlayer.firstName,
+        lastName: leaguePlayer.lastName,
+        email: leaguePlayer.email,
+        phone: leaguePlayer.phone,
+        divisions: leaguePlayer.divisions || []
+      };
+    }
+
+    if (ladderPlayer) {
+      response.ladderInfo = {
+        firstName: ladderPlayer.firstName,
+        lastName: ladderPlayer.lastName,
+        position: ladderPlayer.position,
+        fargoRate: ladderPlayer.fargoRate,
+        ladderName: ladderPlayer.ladderName,
+        isActive: ladderPlayer.isActive,
+        immunityUntil: ladderPlayer.immunityUntil,
+        stats: {
+          wins: ladderPlayer.wins || 0,
+          losses: ladderPlayer.losses || 0
+        }
+      };
+    }
+    
+    res.json(response);
+  } catch (error) {
+    console.error('Error getting player status:', error);
+    res.status(500).json({ error: 'Failed to get player status' });
+  }
+});
+
+
+
+// Get all players across both systems (admin only)
+router.get('/all-players', async (req, res) => {
+  try {
+    const allPlayers = await PlayerRecognitionService.getAllPlayers();
+    res.json(allPlayers);
+  } catch (error) {
+    console.error('Error getting all players:', error);
+    res.status(500).json({ error: 'Failed to get all players' });
+  }
+});
+
+// Validate login across both systems
+router.post('/validate-login', async (req, res) => {
+  try {
+    const { email, pin } = req.body;
+    
+    if (!email || !pin) {
+      return res.status(400).json({ error: 'Email and PIN are required' });
+    }
+    
+    const validation = await PlayerRecognitionService.validateLogin(email, pin);
+    res.json(validation);
+  } catch (error) {
+    console.error('Error validating login:', error);
+    res.status(500).json({ error: 'Failed to validate login' });
+  }
+});
+
+// Admin routes for managing signup applications
+// Get all signup applications
+router.get('/admin/signup-applications', async (req, res) => {
+  try {
+    const applications = await LadderSignupApplication.getAllApplications();
+    res.json(applications);
+  } catch (error) {
+    console.error('Error fetching signup applications:', error);
+    res.status(500).json({ error: 'Failed to fetch signup applications' });
+  }
+});
+
+// Get pending signup applications
+router.get('/admin/signup-applications/pending', async (req, res) => {
+  try {
+    const applications = await LadderSignupApplication.getPendingApplications();
+    res.json(applications);
+  } catch (error) {
+    console.error('Error fetching pending applications:', error);
+    res.status(500).json({ error: 'Failed to fetch pending applications' });
+  }
+});
+
+// Approve a signup application
+router.post('/admin/signup-applications/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reviewedBy, notes } = req.body;
+    
+    const application = await LadderSignupApplication.findById(id);
+    if (!application) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    
+    await application.approve(reviewedBy, notes);
+    res.json({ message: 'Application approved successfully', application });
+  } catch (error) {
+    console.error('Error approving application:', error);
+    res.status(500).json({ error: 'Failed to approve application' });
+  }
+});
+
+// Reject a signup application
+router.post('/admin/signup-applications/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reviewedBy, notes } = req.body;
+    
+    const application = await LadderSignupApplication.findById(id);
+    if (!application) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    
+    await application.reject(reviewedBy, notes);
+    res.json({ message: 'Application rejected successfully', application });
+  } catch (error) {
+    console.error('Error rejecting application:', error);
+    res.status(500).json({ error: 'Failed to reject application' });
+  }
+});
+
+// Mark application as contacted
+router.post('/admin/signup-applications/:id/contact', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reviewedBy, notes } = req.body;
+    
+    const application = await LadderSignupApplication.findById(id);
+    if (!application) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    
+    await application.markAsContacted(reviewedBy, notes);
+    res.json({ message: 'Application marked as contacted successfully', application });
+  } catch (error) {
+    console.error('Error marking application as contacted:', error);
+    res.status(500).json({ error: 'Failed to mark application as contacted' });
+  }
+});
+
+// Simplified routes for the frontend applications manager
+// Get all applications
+router.get('/applications', async (req, res) => {
+  try {
+    const applications = await LadderSignupApplication.find().sort({ createdAt: -1 });
+    res.json(applications);
+  } catch (error) {
+    console.error('Error fetching applications:', error);
+    res.status(500).json({ error: 'Failed to fetch applications' });
+  }
+});
+
+// Approve application
+router.post('/applications/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const application = await LadderSignupApplication.findById(id);
+    if (!application) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    
+    // Check if player already exists
+    const existingPlayer = await LadderPlayer.findOne({ email: application.email });
+    if (existingPlayer) {
+      return res.status(400).json({ error: 'A player with this email already exists' });
+    }
+    
+    // Determine ladder based on FargoRate (default to 499-under for now)
+    let ladderName = '499-under';
+    if (application.fargoRate) {
+      if (application.fargoRate >= 500 && application.fargoRate <= 549) {
+        ladderName = '500-549';
+      } else if (application.fargoRate >= 550) {
+        ladderName = '550-plus';
+      }
+    }
+    
+    // Get the ladder
+    const ladder = await Ladder.findOne({ name: ladderName });
+    if (!ladder) {
+      // Fallback to 499-under if ladder doesn't exist
+      ladderName = '499-under';
+      const fallbackLadder = await Ladder.findOne({ name: '499-under' });
+      if (!fallbackLadder) {
+        console.error('No ladder found in database');
+        return res.status(500).json({ error: 'No ladder found in database. Please run the createLadderData script first.' });
+      }
+    }
+    
+    // Find the lowest position in the ladder
+    const lowestPosition = await LadderPlayer.findOne({ ladderName })
+      .sort({ position: -1 })
+      .limit(1);
+    
+    const newPosition = (lowestPosition?.position || 0) + 1;
+    
+    // Generate a random PIN (4 digits)
+    const pin = Math.floor(1000 + Math.random() * 9000).toString();
+    const hashedPin = await bcrypt.hash(pin, 10);
+    
+    // Create the ladder player
+    const newLadderPlayer = new LadderPlayer({
+      firstName: application.firstName,
+      lastName: application.lastName,
+      email: application.email,
+      pin: hashedPin,
+      fargoRate: application.fargoRate || 450,
+      ladderId: ladder._id,
+      ladderName: ladderName,
+      position: newPosition,
+      isActive: true,
+      stats: {
+        wins: 0,
+        losses: 0
+      }
+    });
+    
+    await newLadderPlayer.save();
+    
+    // Update application status
+    application.status = 'approved';
+    application.reviewedAt = new Date();
+    application.notes = `Approved and added to ${ladderName} ladder at position ${newPosition}`;
+    await application.save();
+    
+    // Return credentials for frontend to handle email sending
+    const playerData = {
+      email: application.email,
+      pin: pin,
+      ladderName: ladderName,
+      position: newPosition,
+      firstName: application.firstName,
+      lastName: application.lastName
+    };
+    
+    res.json({ 
+      message: 'Application approved successfully', 
+      application,
+      playerCreated: playerData,
+      emailSent: false, // Frontend will handle email sending
+      emailDetails: { message: 'Email will be sent from frontend' }
+    });
+  } catch (error) {
+    console.error('Error approving application:', error);
+    res.status(500).json({ error: 'Failed to approve application' });
+  }
+});
+
+// Reject application
+router.post('/applications/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    
+    const application = await LadderSignupApplication.findById(id);
+    if (!application) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    
+    application.status = 'rejected';
+    application.rejectionReason = reason;
+    application.reviewedAt = new Date();
+    await application.save();
+    
+    res.json({ message: 'Application rejected successfully', application });
+  } catch (error) {
+    console.error('Error rejecting application:', error);
+    res.status(500).json({ error: 'Failed to reject application' });
+  }
+});
+
+// Prize Pool API Routes
+router.get('/prize-pool/:ladderName', async (req, res) => {
+  try {
+    const { ladderName } = req.params;
+    
+    // Get current period start and end dates
+    const currentDate = new Date();
+    const startOfPeriod = new Date(currentDate.getFullYear(), Math.floor(currentDate.getMonth() / 2) * 2, 1);
+    const endOfPeriod = new Date(startOfPeriod);
+    endOfPeriod.setMonth(endOfPeriod.getMonth() + 2);
+    
+    // Get all matches for this ladder in the current period
+    const matches = await LadderMatch.find({
+      ladderName: ladderName,
+      matchDate: { $gte: startOfPeriod, $lte: endOfPeriod },
+      status: 'completed'
+    });
+    
+    // Calculate prize pool ($3 per match)
+    const totalMatches = matches.length;
+    const currentPrizePool = totalMatches * 3;
+    
+    // Calculate next distribution date
+    const nextDistribution = new Date(endOfPeriod);
+    nextDistribution.setDate(nextDistribution.getDate() + 1);
+    
+    res.json({
+      currentPrizePool: currentPrizePool,
+      totalMatches: totalMatches,
+      nextDistribution: nextDistribution.toISOString(),
+      periodStart: startOfPeriod.toISOString(),
+      periodEnd: endOfPeriod.toISOString(),
+      isEstimated: false
+    });
+  } catch (error) {
+    console.error('Error fetching prize pool data:', error);
+    res.status(500).json({ error: 'Failed to fetch prize pool data' });
+  }
+});
+
+router.get('/prize-pool/:ladderName/history', async (req, res) => {
+  try {
+    const { ladderName } = req.params;
+    
+    // Get historical prize pool data for the last 6 periods (1 year)
+    const historicalData = [];
+    const currentDate = new Date();
+    
+    for (let i = 0; i < 6; i++) {
+      const periodStart = new Date(currentDate.getFullYear(), Math.floor((currentDate.getMonth() - (i * 2)) / 2) * 2, 1);
+      const periodEnd = new Date(periodStart);
+      periodEnd.setMonth(periodEnd.getMonth() + 2);
+      
+      // Get matches for this period
+      const matches = await LadderMatch.find({
+        ladderName: ladderName,
+        matchDate: { $gte: periodStart, $lt: periodEnd },
+        status: 'completed'
+      });
+      
+      const prizePool = matches.length * 3;
+      const periodName = `${periodStart.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })} - ${periodEnd.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+      
+      historicalData.push({
+        period: periodName,
+        matches: matches.length,
+        prizePool: prizePool,
+        startDate: periodStart.toISOString(),
+        endDate: periodEnd.toISOString()
+      });
+    }
+    
+    res.json(historicalData);
+  } catch (error) {
+    console.error('Error fetching historical data:', error);
+    res.status(500).json({ error: 'Failed to fetch historical data' });
+  }
+});
+
+router.get('/prize-pool/:ladderName/winners', async (req, res) => {
+  try {
+    const { ladderName } = req.params;
+    
+    // Get winners from the last 3 periods
+    const winners = [];
+    const currentDate = new Date();
+    
+    for (let i = 0; i < 3; i++) {
+      const periodStart = new Date(currentDate.getFullYear(), Math.floor((currentDate.getMonth() - (i * 2)) / 2) * 2, 1);
+      const periodEnd = new Date(periodStart);
+      periodEnd.setMonth(periodEnd.getMonth() + 2);
+      
+      // Get 1st place winner for this period
+      const firstPlaceWinner = await LadderPlayer.findOne({
+        ladderName: ladderName,
+        position: 1
+      }).sort({ updatedAt: -1 });
+      
+      if (firstPlaceWinner) {
+        winners.push({
+          playerName: `${firstPlaceWinner.firstName} ${firstPlaceWinner.lastName}`,
+          category: '1st Place',
+          amount: 150, // 50% of estimated $300 prize pool
+          date: periodEnd.toISOString(),
+          period: `${periodStart.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })} - ${periodEnd.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`
+        });
+      }
+      
+      // Get most improved player for this period
+      // This would need to be calculated based on position changes
+      // For now, we'll use a placeholder
+      const mostImprovedWinner = await LadderPlayer.findOne({
+        ladderName: ladderName,
+        position: { $gt: 1 }
+      }).sort({ updatedAt: -1 });
+      
+      if (mostImprovedWinner) {
+        winners.push({
+          playerName: `${mostImprovedWinner.firstName} ${mostImprovedWinner.lastName}`,
+          category: 'Most Improved',
+          amount: 150, // 50% of estimated $300 prize pool
+          date: periodEnd.toISOString(),
+          period: `${periodStart.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })} - ${periodEnd.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`
+        });
+      }
+    }
+    
+    res.json(winners);
+  } catch (error) {
+    console.error('Error fetching winners:', error);
+    res.status(500).json({ error: 'Failed to fetch winners data' });
+  }
+});
+
+export default router;

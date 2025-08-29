@@ -30,4 +30,7 @@ router.post('/report-result', challengeController.reportMatchResult);
 router.get('/rematch-eligibility/:playerName/:division', challengeController.getRematchEligibility);
 router.post('/validate-rematch', challengeController.validateRematch);
 
+// Pending challenges for match reporting
+router.get('/pending/:playerName/:ladder', challengeController.getPendingChallenges);
+
 export default router; 

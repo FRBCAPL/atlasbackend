@@ -28,11 +28,63 @@ router.get('/', async (req, res) => {
           strike3: 0
         },
         paymentMethods: {
+          venmo: {
+            enabled: true,
+            username: '@your-venmo-username', // USER NEEDS TO UPDATE THIS
+            displayName: 'Venmo',
+            instructions: 'Send payment to @your-venmo-username' // USER NEEDS TO UPDATE THIS
+          },
+          cashapp: {
+            enabled: true,
+            username: '$your-cashapp-username', // USER NEEDS TO UPDATE THIS
+            displayName: 'Cash App',
+            instructions: 'Send payment to $your-cashapp-username' // USER NEEDS TO UPDATE THIS
+          },
+          creditCard: {
+            enabled: true,
+            processor: 'square',
+            paymentLink: 'https://your-square-payment-link.com', // USER NEEDS TO UPDATE THIS
+            squareAppId: '',
+            squareLocationId: '',
+            displayName: 'Credit/Debit Card',
+            instructions: 'Pay online using the link below'
+          },
+          applePay: {
+            enabled: false,
+            paymentLink: '',
+            displayName: 'Apple Pay',
+            instructions: 'Pay using Apple Pay'
+          },
+          googlePay: {
+            enabled: false,
+            paymentLink: '',
+            displayName: 'Google Pay',
+            instructions: 'Pay using Google Pay'
+          },
           cash: {
             enabled: true,
             displayName: 'Cash',
             instructions: 'Pay in person to league administrator'
+          },
+          check: {
+            enabled: false,
+            payeeName: 'Your Name or Business Name', // USER NEEDS TO UPDATE THIS
+            mailingAddress: 'Your Mailing Address', // USER NEEDS TO UPDATE THIS
+            displayName: 'Check',
+            instructions: 'Make check payable to Your Name or Business Name' // USER NEEDS TO UPDATE THIS
           }
+        },
+        additionalInstructions: 'Please include your name and email in the payment note for proper credit.',
+        contactInfo: {
+          adminName: 'Your Name', // USER NEEDS TO UPDATE THIS
+          adminEmail: 'your-email@example.com', // USER NEEDS TO UPDATE THIS
+          adminPhone: '(555) 123-4567' // USER NEEDS TO UPDATE THIS
+        },
+        currentSession: {
+          name: 'Current Session',
+          startDate: new Date(),
+          endDate: new Date(Date.now() + 10 * 7 * 24 * 60 * 60 * 1000), // 10 weeks from now
+          isActive: true
         }
       });
       await config.save();

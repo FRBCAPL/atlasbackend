@@ -13,6 +13,19 @@ import {
 
 const router = express.Router();
 
+// Basic payments endpoint for testing
+router.get('/', (req, res) => {
+  res.json({ 
+    message: 'Payments API is working!',
+    endpoints: [
+      '/player/:playerId/:session',
+      '/division/:division/:session', 
+      '/stats/:division/:session',
+      '/eligibility/:playerId/:session'
+    ]
+  });
+});
+
 // Get player payments
 router.get('/player/:playerId/:session', getPlayerPayments);
 

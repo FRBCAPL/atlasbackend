@@ -16,6 +16,33 @@ router.post('/admin/sync-users', userController.syncUsers);
 router.post('/admin/approve-registration/:registrationId', userController.approveRegistration);
 router.post('/admin/reject-registration/:registrationId', userController.rejectRegistration);
 
+// Get users pending payment (MUST be before /:userId routes)
+router.get('/pending-payment', async (req, res) => {
+  try {
+    const pendingUsers = await User.find({ 
+      paymentStatus: 'pending',
+      isActive: true 
+    }).select('firstName lastName email registrationDate paymentStatus');
+    
+    res.json({ 
+      success: true, 
+      users: pendingUsers 
+    });
+    
+  } catch (error) {
+    console.error('Error fetching pending payments:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error fetching pending payments' 
+    });
+  }
+});
+
+// Admin user management routes (MUST be before /:idOrEmail routes)
+router.post('/', userController.createUser);
+router.put('/:userId', userController.updateUser);
+router.delete('/:userId', userController.deleteUser);
+
 // User management routes
 router.get('/:idOrEmail', userController.getUser);
 router.put('/:idOrEmail/preferences', userController.updatePreferences);
@@ -72,27 +99,7 @@ router.post('/:userId/confirm-payment', async (req, res) => {
   }
 });
 
-// Get users pending payment
-router.get('/pending-payment', async (req, res) => {
-  try {
-    const pendingUsers = await User.find({ 
-      paymentStatus: 'pending',
-      isActive: true 
-    }).select('firstName lastName email registrationDate paymentStatus');
-    
-    res.json({ 
-      success: true, 
-      users: pendingUsers 
-    });
-    
-  } catch (error) {
-    console.error('Error fetching pending payments:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error fetching pending payments' 
-    });
-  }
-});
+
 
 // Check if PIN already exists
 router.get('/check-pin/:pin', async (req, res) => {

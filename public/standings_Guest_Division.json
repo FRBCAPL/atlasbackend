@@ -1,0 +1,47 @@
+[
+  {
+    "rank": 1,
+    "playerName": "John Smith",
+    "wins": 8,
+    "losses": 2,
+    "points": 24,
+    "division": "Guest Division",
+    "isActive": true
+  },
+  {
+    "rank": 2,
+    "playerName": "Mike Johnson",
+    "wins": 7,
+    "losses": 3,
+    "points": 21,
+    "division": "Guest Division",
+    "isActive": true
+  },
+  {
+    "rank": 3,
+    "playerName": "Sarah Wilson",
+    "wins": 6,
+    "losses": 4,
+    "points": 18,
+    "division": "Guest Division",
+    "isActive": true
+  },
+  {
+    "rank": 4,
+    "playerName": "David Brown",
+    "wins": 5,
+    "losses": 5,
+    "points": 15,
+    "division": "Guest Division",
+    "isActive": true
+  },
+  {
+    "rank": 5,
+    "playerName": "Guest User",
+    "wins": 4,
+    "losses": 6,
+    "points": 12,
+    "division": "Guest Division",
+    "isActive": true
+  }
+]

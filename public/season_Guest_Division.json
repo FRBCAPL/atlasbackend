@@ -1,0 +1,15 @@
+{
+  "id": "guest-season-2024",
+  "name": "Guest Season 2024",
+  "division": "Guest Division",
+  "startDate": "2024-12-01",
+  "endDate": "2025-03-31",
+  "phase1EndDate": "2024-12-31",
+  "phase2EndDate": "2025-02-28",
+  "phase3EndDate": "2025-03-31",
+  "currentPhase": 1,
+  "isActive": true,
+  "totalMatches": 6,
+  "completedMatches": 2,
+  "pendingMatches": 4
+}

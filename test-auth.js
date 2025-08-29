@@ -1,5 +1,8 @@
+import dotenv from 'dotenv';
 import databaseService from './src/services/databaseService.js';
 import PlatformAdmin from './src/models/PlatformAdmin.js';
+
+dotenv.config();
 
 async function testAuth() {
   try {

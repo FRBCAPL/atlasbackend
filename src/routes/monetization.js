@@ -1,0 +1,1275 @@
+import express from 'express';
+import Membership from '../models/Membership.js';
+import PrizePool from '../models/PrizePool.js';
+import LadderPlayer from '../models/LadderPlayer.js';
+import LadderMatch from '../models/LadderMatch.js';
+import PaymentConfig from '../models/PaymentConfig.js';
+import { 
+  createSquarePayment, 
+  createSquareCustomer, 
+  getSquareCustomerByEmail,
+  createSquarePaymentLink,
+  getSquarePayment 
+} from '../services/squareService.js';
+
+const router = express.Router();
+
+// ============================================================================
+// SQUARE PAYMENT INTEGRATION
+// ============================================================================
+
+/**
+ * Create Square payment for membership
+ * POST /api/monetization/square/create-membership-payment
+ */
+router.post('/square/create-membership-payment', async (req, res) => {
+  try {
+    const { 
+      email, 
+      playerName, 
+      sourceId, 
+      customerId,
+      amount = 500 // $5.00 in cents
+    } = req.body;
+    
+    if (!email || !sourceId) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Email and payment source are required'
+      });
+    }
+
+    // Get or create Square customer
+    let squareCustomerId = customerId;
+    if (!squareCustomerId) {
+      const customerResult = await getSquareCustomerByEmail(email);
+      if (!customerResult.success) {
+        // Create new customer
+        const [firstName, lastName] = playerName.split(' ');
+        const createCustomerResult = await createSquareCustomer({
+          email,
+          firstName: firstName || playerName,
+          lastName: lastName || '',
+        });
+        
+        if (!createCustomerResult.success) {
+          return res.status(500).json({
+            error: 'Failed to create customer',
+            message: createCustomerResult.error
+          });
+        }
+        
+        squareCustomerId = createCustomerResult.customerId;
+      } else {
+        squareCustomerId = customerResult.customerId;
+      }
+    }
+
+    // Create Square payment
+    const paymentResult = await createSquarePayment({
+      amount: amount,
+      sourceId: sourceId,
+      idempotencyKey: `membership_${Date.now()}_${email}`,
+      customerId: squareCustomerId,
+      note: `Ladder Membership - ${playerName}`
+    });
+
+    if (!paymentResult.success) {
+      return res.status(500).json({
+        error: 'Payment failed',
+        message: paymentResult.error,
+        details: paymentResult.details
+      });
+    }
+
+    // Create or update membership
+    let membership = await Membership.findOne({ playerId: email });
+    
+    if (!membership) {
+      membership = new Membership({
+        playerId: email,
+        tier: 'standard',
+        status: 'active',
+        amount: amount / 100, // Convert cents to dollars
+        startDate: new Date(),
+        paymentMethod: 'square',
+        squareCustomerId: squareCustomerId,
+        squarePaymentId: paymentResult.transactionId,
+        paymentHistory: [{
+          date: new Date(),
+          amount: amount / 100,
+          method: 'square',
+          transactionId: paymentResult.transactionId,
+          verified: true
+        }]
+      });
+    } else {
+      membership.status = 'active';
+      membership.lastPaymentDate = new Date();
+      membership.paymentMethod = 'square';
+      membership.squareCustomerId = squareCustomerId;
+      membership.squarePaymentId = paymentResult.transactionId;
+      
+      if (!membership.paymentHistory) {
+        membership.paymentHistory = [];
+      }
+      membership.paymentHistory.push({
+        date: new Date(),
+        amount: amount / 100,
+        method: 'square',
+        transactionId: paymentResult.transactionId,
+        verified: true
+      });
+    }
+    
+    await membership.save();
+
+    res.json({
+      success: true,
+      message: 'Payment processed successfully',
+      payment: {
+        id: paymentResult.transactionId,
+        amount: amount / 100,
+        status: 'completed',
+        customerId: squareCustomerId
+      },
+      membership: {
+        playerId: membership.playerId,
+        status: membership.status,
+        amount: membership.amount,
+        startDate: membership.startDate
+      }
+    });
+
+  } catch (error) {
+    console.error('Square membership payment error:', error);
+    res.status(500).json({
+      error: 'Failed to process payment',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Create Square payment link for membership
+ * POST /api/monetization/square/create-membership-link
+ */
+router.post('/square/create-membership-link', async (req, res) => {
+  try {
+    const { 
+      email, 
+      playerName, 
+      amount = 500, // $5.00 in cents
+      redirectUrl 
+    } = req.body;
+    
+    if (!email || !playerName) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Email and player name are required'
+      });
+    }
+
+    // Create payment link
+    const linkResult = await createSquarePaymentLink({
+      amount: amount,
+      description: `Ladder Membership - ${playerName}`,
+      redirectUrl: redirectUrl || `${process.env.FRONTEND_URL}/payment-success?email=${email}`
+    });
+
+    if (!linkResult.success) {
+      return res.status(500).json({
+        error: 'Failed to create payment link',
+        message: linkResult.error
+      });
+    }
+
+    res.json({
+      success: true,
+      paymentLink: linkResult.paymentLink,
+      url: linkResult.url,
+      amount: amount / 100
+    });
+
+  } catch (error) {
+    console.error('Square payment link error:', error);
+    res.status(500).json({
+      error: 'Failed to create payment link',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Verify Square payment webhook
+ * POST /api/monetization/square/webhook
+ */
+router.post('/square/webhook', async (req, res) => {
+  try {
+    const { type, data } = req.body;
+    
+    if (type === 'payment.created' || type === 'payment.updated') {
+      const payment = data.object;
+      
+      // Check if this is a membership payment
+      if (payment.note && payment.note.includes('Ladder Membership')) {
+        const email = payment.note.split(' - ')[1]; // Extract email from note
+        
+        // Update membership status
+        const membership = await Membership.findOne({ playerId: email });
+        if (membership) {
+          membership.status = 'active';
+          membership.lastPaymentDate = new Date();
+          membership.squarePaymentId = payment.id;
+          
+          if (!membership.paymentHistory) {
+            membership.paymentHistory = [];
+          }
+          membership.paymentHistory.push({
+            date: new Date(),
+            amount: payment.amountMoney.amount / 100,
+            method: 'square',
+            transactionId: payment.id,
+            verified: true
+          });
+          
+          await membership.save();
+        }
+      }
+    }
+    
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('Square webhook error:', error);
+    res.status(500).json({
+      error: 'Webhook processing failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Get Square payment status
+ * GET /api/monetization/square/payment-status/:paymentId
+ */
+router.get('/square/payment-status/:paymentId', async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    
+    const paymentResult = await getSquarePayment(paymentId);
+    
+    if (!paymentResult.success) {
+      return res.status(404).json({
+        error: 'Payment not found',
+        message: paymentResult.error
+      });
+    }
+
+    res.json({
+      success: true,
+      payment: paymentResult.payment
+    });
+
+  } catch (error) {
+    console.error('Square payment status error:', error);
+    res.status(500).json({
+      error: 'Failed to get payment status',
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// PAYMENT INTEGRATION (Square, CashApp, Venmo)
+// ============================================================================
+
+/**
+ * Get available payment methods for ladder
+ * GET /api/monetization/payment-methods
+ */
+router.get('/payment-methods', async (req, res) => {
+  try {
+    const paymentConfig = await PaymentConfig.findOne({ leagueId: 'default' });
+    
+    if (!paymentConfig) {
+      return res.status(404).json({
+        error: 'Payment configuration not found',
+        message: 'Please configure payment methods in the admin dashboard'
+      });
+    }
+
+    // Filter enabled payment methods
+    const enabledMethods = Object.entries(paymentConfig.paymentMethods)
+      .filter(([key, method]) => method.enabled)
+      .map(([key, method]) => ({
+        id: key,
+        name: method.displayName,
+        instructions: method.instructions,
+        username: method.username || '',
+        paymentLink: method.paymentLink || '',
+        payeeName: method.payeeName || '',
+        mailingAddress: method.mailingAddress || ''
+      }));
+
+    res.json({
+      success: true,
+      paymentMethods: enabledMethods,
+      contactInfo: paymentConfig.contactInfo,
+      additionalInstructions: paymentConfig.additionalInstructions
+    });
+
+  } catch (error) {
+    console.error('Error getting payment methods:', error);
+    res.status(500).json({
+      error: 'Failed to get payment methods',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Create payment session for membership
+ * POST /api/monetization/create-membership-payment
+ */
+router.post('/create-membership-payment', async (req, res) => {
+  try {
+    const { email, playerName, paymentMethod, returnUrl } = req.body;
+    
+    if (!email || !paymentMethod) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Email and payment method are required'
+      });
+    }
+
+    // Get payment configuration
+    const paymentConfig = await PaymentConfig.findOne({ leagueId: 'default' });
+    if (!paymentConfig) {
+      return res.status(404).json({
+        error: 'Payment configuration not found',
+        message: 'Please configure payment methods in the admin dashboard'
+      });
+    }
+
+    const method = paymentConfig.paymentMethods[paymentMethod];
+    if (!method || !method.enabled) {
+      return res.status(400).json({
+        error: 'Invalid payment method',
+        message: 'Selected payment method is not available'
+      });
+    }
+
+    // Create payment session
+    const paymentSession = {
+      id: `membership_${Date.now()}`,
+      type: 'membership',
+      amount: 5.00, // $5/month membership
+      email,
+      playerName,
+      paymentMethod,
+      instructions: method.instructions,
+      username: method.username,
+      paymentLink: method.paymentLink,
+      payeeName: method.payeeName,
+      mailingAddress: method.mailingAddress,
+      status: 'pending',
+      createdAt: new Date()
+    };
+
+    res.json({
+      success: true,
+      paymentSession,
+      membership: {
+        price: 5.00,
+        name: 'Ladder Membership'
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating membership payment:', error);
+    res.status(500).json({
+      error: 'Failed to create payment session',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Create payment session for match fee
+ * POST /api/monetization/create-match-fee-payment
+ */
+router.post('/create-match-fee-payment', async (req, res) => {
+  try {
+    const { matchId, playerId, amount, paymentMethod, returnUrl } = req.body;
+    
+    if (!matchId || !playerId || !amount || !paymentMethod) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Match ID, player ID, amount, and payment method are required'
+      });
+    }
+
+    // Get payment configuration
+    const paymentConfig = await PaymentConfig.findOne({ leagueId: 'default' });
+    if (!paymentConfig) {
+      return res.status(404).json({
+        error: 'Payment configuration not found',
+        message: 'Please configure payment methods in the admin dashboard'
+      });
+    }
+
+    const method = paymentConfig.paymentMethods[paymentMethod];
+    if (!method || !method.enabled) {
+      return res.status(400).json({
+        error: 'Invalid payment method',
+        message: 'Selected payment method is not available'
+      });
+    }
+
+    // Create payment session
+    const paymentSession = {
+      id: `match_${Date.now()}`,
+      type: 'match_fee',
+      amount: parseFloat(amount),
+      matchId,
+      playerId,
+      paymentMethod,
+      instructions: method.instructions,
+      username: method.username,
+      paymentLink: method.paymentLink,
+      payeeName: method.payeeName,
+      mailingAddress: method.mailingAddress,
+      status: 'pending',
+      createdAt: new Date()
+    };
+
+    res.json({
+      success: true,
+      paymentSession,
+      matchId,
+      amount
+    });
+
+  } catch (error) {
+    console.error('Error creating match fee payment:', error);
+    res.status(500).json({
+      error: 'Failed to create payment session',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Verify payment completion
+ * POST /api/monetization/verify-payment
+ */
+router.post('/verify-payment', async (req, res) => {
+  try {
+    const { paymentSessionId, email, paymentMethod } = req.body;
+    
+    if (!paymentSessionId || !email) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Payment session ID and email are required'
+      });
+    }
+
+    // For manual payment verification, we'll create the membership/match fee
+    // In a real implementation, you'd verify the payment with your payment processor
+    
+    // Find or create membership
+    let membership = await Membership.findOne({ playerId: email });
+    
+    if (!membership) {
+      // Create new membership
+      membership = new Membership({
+        playerId: email,
+        tier: 'standard',
+        status: 'active',
+        amount: 5.00,
+        startDate: new Date(),
+        paymentMethod: paymentMethod
+      });
+    } else {
+      // Update existing membership
+      membership.status = 'active';
+      membership.lastPaymentDate = new Date();
+      membership.paymentMethod = paymentMethod;
+    }
+    
+    await membership.save();
+
+    res.json({
+      success: true,
+      membership: {
+        playerId: membership.playerId,
+        tier: membership.tier,
+        status: membership.status,
+        amount: membership.amount,
+        startDate: membership.startDate
+      }
+    });
+
+  } catch (error) {
+    console.error('Error verifying payment:', error);
+    res.status(500).json({
+      error: 'Failed to verify payment',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Record manual payment
+ * POST /api/monetization/record-payment
+ */
+router.post('/record-payment', async (req, res) => {
+  try {
+    const { 
+      type, 
+      email, 
+      playerName, 
+      amount, 
+      paymentMethod, 
+      matchId, 
+      playerId,
+      notes,
+      transactionId,
+      paymentDate
+    } = req.body;
+    
+    if (!type || !email || !amount || !paymentMethod) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Type, email, amount, and payment method are required'
+      });
+    }
+
+    if (type === 'membership') {
+      // Create or update membership
+      let membership = await Membership.findOne({ playerId: email });
+      
+      if (!membership) {
+        membership = new Membership({
+          playerId: email,
+          tier: 'standard',
+          status: 'active',
+          amount: 5.00,
+          startDate: new Date(),
+          paymentMethod: paymentMethod,
+          lastPaymentDate: paymentDate || new Date(),
+          paymentHistory: [{
+            date: paymentDate || new Date(),
+            amount: amount,
+            method: paymentMethod,
+            transactionId: transactionId,
+            notes: notes,
+            verified: true
+          }]
+        });
+      } else {
+        membership.status = 'active';
+        membership.lastPaymentDate = paymentDate || new Date();
+        membership.paymentMethod = paymentMethod;
+        
+        // Add to payment history
+        if (!membership.paymentHistory) {
+          membership.paymentHistory = [];
+        }
+        membership.paymentHistory.push({
+          date: paymentDate || new Date(),
+          amount: amount,
+          method: paymentMethod,
+          transactionId: transactionId,
+          notes: notes,
+          verified: true
+        });
+      }
+      
+      await membership.save();
+      
+      console.log(`Membership payment recorded for ${email} via ${paymentMethod}`);
+      
+      res.json({
+        success: true,
+        message: 'Membership payment recorded successfully',
+        membership: {
+          playerId: membership.playerId,
+          tier: membership.tier,
+          status: membership.status,
+          amount: membership.amount,
+          startDate: membership.startDate,
+          lastPaymentDate: membership.lastPaymentDate
+        }
+      });
+    } else if (type === 'match_fee') {
+      // Record match fee payment
+      const match = await LadderMatch.findById(matchId);
+      if (!match) {
+        return res.status(404).json({
+          error: 'Match not found',
+          message: 'Match ID is invalid'
+        });
+      }
+      
+      // Update match with payment info
+      match.paymentStatus = 'paid';
+      match.paymentMethod = paymentMethod;
+      match.paymentDate = paymentDate || new Date();
+      match.paymentNotes = notes;
+      match.transactionId = transactionId;
+      
+      await match.save();
+      
+      console.log(`Match fee payment recorded for match ${matchId} via ${paymentMethod}`);
+      
+      res.json({
+        success: true,
+        message: 'Match fee payment recorded successfully',
+        match: {
+          id: match._id,
+          paymentStatus: match.paymentStatus,
+          paymentMethod: match.paymentMethod,
+          paymentDate: match.paymentDate
+        }
+      });
+    } else {
+      return res.status(400).json({
+        error: 'Invalid payment type',
+        message: 'Payment type must be "membership" or "match_fee"'
+      });
+    }
+
+  } catch (error) {
+    console.error('Error recording payment:', error);
+    res.status(500).json({
+      error: 'Failed to record payment',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Get payment status for a player
+ * GET /api/monetization/payment-status/:email
+ */
+router.get('/payment-status/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    const membership = await Membership.findOne({ playerId: email });
+    
+    if (!membership) {
+      return res.json({
+        success: true,
+        hasMembership: false,
+        status: 'no_membership',
+        message: 'No active membership found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      hasMembership: true,
+      status: membership.status,
+      membership: {
+        tier: membership.tier,
+        amount: membership.amount,
+        startDate: membership.startDate,
+        lastPaymentDate: membership.lastPaymentDate,
+        paymentMethod: membership.paymentMethod,
+        paymentHistory: membership.paymentHistory || []
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting payment status:', error);
+    res.status(500).json({
+      error: 'Failed to get payment status',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Admin: Mark payment as verified
+ * POST /api/monetization/verify-payment-admin
+ */
+router.post('/verify-payment-admin', async (req, res) => {
+  try {
+    const { 
+      type, 
+      email, 
+      paymentId, 
+      verified, 
+      adminNotes 
+    } = req.body;
+    
+    if (!type || !email || !paymentId) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Type, email, and payment ID are required'
+      });
+    }
+
+    if (type === 'membership') {
+      const membership = await Membership.findOne({ playerId: email });
+      
+      if (!membership) {
+        return res.status(404).json({
+          error: 'Membership not found',
+          message: 'No membership found for this email'
+        });
+      }
+      
+      // Update payment history entry
+      if (membership.paymentHistory) {
+        const paymentEntry = membership.paymentHistory.find(p => p._id.toString() === paymentId);
+        if (paymentEntry) {
+          paymentEntry.verified = verified;
+          paymentEntry.adminNotes = adminNotes;
+          paymentEntry.verifiedDate = new Date();
+        }
+      }
+      
+      await membership.save();
+      
+      res.json({
+        success: true,
+        message: `Payment ${verified ? 'verified' : 'unverified'} successfully`,
+        membership: {
+          playerId: membership.playerId,
+          status: membership.status,
+          lastPaymentDate: membership.lastPaymentDate
+        }
+      });
+    } else if (type === 'match_fee') {
+      const match = await LadderMatch.findById(paymentId);
+      
+      if (!match) {
+        return res.status(404).json({
+          error: 'Match not found',
+          message: 'Match ID is invalid'
+        });
+      }
+      
+      match.paymentVerified = verified;
+      match.adminNotes = adminNotes;
+      match.verifiedDate = new Date();
+      
+      await match.save();
+      
+      res.json({
+        success: true,
+        message: `Match payment ${verified ? 'verified' : 'unverified'} successfully`,
+        match: {
+          id: match._id,
+          paymentStatus: match.paymentStatus,
+          paymentVerified: match.paymentVerified
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('Error verifying payment:', error);
+    res.status(500).json({
+      error: 'Failed to verify payment',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Get pending payments for admin review
+ * GET /api/monetization/pending-payments
+ */
+router.get('/pending-payments', async (req, res) => {
+  try {
+    // Get memberships with pending payments
+    const pendingMemberships = await Membership.find({
+      status: 'pending',
+      'paymentHistory.verified': { $ne: true }
+    });
+    
+    // Get matches with pending payments
+    const pendingMatches = await LadderMatch.find({
+      paymentStatus: 'pending'
+    });
+    
+    res.json({
+      success: true,
+      pendingMemberships: pendingMemberships.map(m => ({
+        email: m.playerId,
+        tier: m.tier,
+        amount: m.amount,
+        paymentMethod: m.paymentMethod,
+        lastPaymentDate: m.lastPaymentDate,
+        paymentHistory: m.paymentHistory
+      })),
+      pendingMatches: pendingMatches.map(m => ({
+        id: m._id,
+        challenger: m.challenger,
+        defender: m.defender,
+        amount: m.entryFee,
+        paymentMethod: m.paymentMethod,
+        matchDate: m.matchDate
+      }))
+    });
+
+  } catch (error) {
+    console.error('Error getting pending payments:', error);
+    res.status(500).json({
+      error: 'Failed to get pending payments',
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// MEMBERSHIP MANAGEMENT
+// ============================================================================
+
+/**
+ * Get membership pricing
+ * GET /api/monetization/tiers
+ */
+router.get('/tiers', (req, res) => {
+  const membership = {
+    name: 'Ladder Membership',
+    price: 5.00,
+    features: [
+      'Access to ladder challenges',
+      'Match reporting',
+      'Player statistics',
+      'Challenge other players',
+      'Track your progress'
+    ]
+  };
+  
+  res.json({
+    success: true,
+    membership,
+    currency: 'USD'
+  });
+});
+
+/**
+ * Create or update membership
+ * POST /api/monetization/membership
+ */
+router.post('/membership', async (req, res) => {
+  try {
+    const { playerId, paymentMethod, status = 'active' } = req.body;
+    
+    if (!playerId) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Player ID is required'
+      });
+    }
+    
+    // Check if player exists
+    const player = await LadderPlayer.findById(playerId);
+    if (!player) {
+      return res.status(404).json({
+        error: 'Player not found',
+        message: 'The specified player does not exist'
+      });
+    }
+    
+    // Check if membership already exists
+    let membership = await Membership.findOne({ playerId });
+    
+    if (membership) {
+      // Update existing membership
+      membership.tier = 'standard';
+      membership.status = status;
+      membership.paymentMethod = paymentMethod;
+      membership.nextBillingDate = new Date();
+      membership.nextBillingDate.setMonth(membership.nextBillingDate.getMonth() + 1);
+    } else {
+      // Create new membership
+      membership = new Membership({
+        playerId,
+        tier: 'standard',
+        status: status,
+        paymentMethod: paymentMethod,
+        nextBillingDate: new Date()
+      });
+      membership.nextBillingDate.setMonth(membership.nextBillingDate.getMonth() + 1);
+    }
+    
+    await membership.save();
+    
+    res.json({
+      success: true,
+      message: 'Membership created successfully',
+      membership
+    });
+    
+  } catch (error) {
+    console.error('Error creating membership:', error);
+    res.status(500).json({
+      error: 'Failed to create membership',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Get player membership status
+ * GET /api/monetization/membership/:playerId
+ */
+router.get('/membership/:playerId', async (req, res) => {
+  try {
+    const { playerId } = req.params;
+    
+    const membership = await Membership.findOne({ playerId }).populate('playerId');
+    
+    if (!membership) {
+      return res.json({
+        success: true,
+        hasMembership: false,
+        membership: null
+      });
+    }
+    
+    res.json({
+      success: true,
+      hasMembership: true,
+      membership,
+      isActive: membership.isActive()
+    });
+    
+  } catch (error) {
+    console.error('Error getting membership:', error);
+    res.status(500).json({
+      error: 'Failed to get membership',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Cancel membership
+ * POST /api/monetization/membership/:playerId/cancel
+ */
+router.post('/membership/:playerId/cancel', async (req, res) => {
+  try {
+    const { playerId } = req.params;
+    const { reason } = req.body;
+    
+    const membership = await Membership.findOne({ playerId });
+    
+    if (!membership) {
+      return res.status(404).json({
+        error: 'Membership not found',
+        message: 'No membership found for this player'
+      });
+    }
+    
+    await membership.cancelMembership(reason);
+    
+    res.json({
+      success: true,
+      message: 'Membership cancelled successfully',
+      membership
+    });
+    
+  } catch (error) {
+    console.error('Error cancelling membership:', error);
+    res.status(500).json({
+      error: 'Failed to cancel membership',
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// MATCH FEE PROCESSING
+// ============================================================================
+
+/**
+ * Process match fee payment
+ * POST /api/monetization/match-fee
+ */
+router.post('/match-fee', async (req, res) => {
+  try {
+    const { matchId, playerId, amount, paymentMethod } = req.body;
+    
+    if (!matchId || !playerId || !amount) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Match ID, player ID, and amount are required'
+      });
+    }
+    
+    // Check if player has active membership
+    const membership = await Membership.findOne({ playerId });
+    if (!membership || !membership.isActive()) {
+      return res.status(403).json({
+        error: 'Membership required',
+        message: 'Active membership is required to report matches'
+      });
+    }
+    
+    // Get current prize pool
+    let prizePool = await PrizePool.getCurrentPrizePool();
+    
+    if (!prizePool) {
+      // Create new prize pool if none exists
+      prizePool = await PrizePool.createNewPeriod('quarterly');
+      await prizePool.save();
+    }
+    
+    // Get player info
+    const player = await LadderPlayer.findById(playerId);
+    if (!player) {
+      return res.status(404).json({
+        error: 'Player not found',
+        message: 'The specified player does not exist'
+      });
+    }
+    
+    // Calculate fee distribution
+    const prizePoolContribution = 3; // Fixed $3 to prize pool per match
+    const platformRevenue = amount - prizePoolContribution;
+    
+    // Add to prize pool
+    await prizePool.addMatchContribution({
+      matchId,
+      amount: prizePoolContribution,
+      playerId,
+      playerName: `${player.firstName} ${player.lastName}`
+    });
+    
+    // Record payment in membership
+    await membership.addPayment({
+      amount,
+      status: 'completed',
+      paymentMethod: paymentMethod,
+      description: `Match fee for match ${matchId}`
+    });
+    
+    res.json({
+      success: true,
+      message: 'Match fee processed successfully',
+      payment: {
+        totalAmount: amount,
+        prizePoolContribution,
+        platformRevenue,
+        matchId,
+        playerId
+      },
+      prizePool: {
+        currentBalance: prizePool.currentBalance,
+        periodName: prizePool.periodName
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error processing match fee:', error);
+    res.status(500).json({
+      error: 'Failed to process match fee',
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// PRIZE POOL MANAGEMENT
+// ============================================================================
+
+/**
+ * Get current prize pool status
+ * GET /api/monetization/prize-pool/current
+ */
+router.get('/prize-pool/current', async (req, res) => {
+  try {
+    let prizePool = await PrizePool.getCurrentPrizePool();
+    
+    if (!prizePool) {
+      // Create new prize pool if none exists
+      prizePool = await PrizePool.createNewPeriod('quarterly');
+      await prizePool.save();
+    }
+    
+    res.json({
+      success: true,
+      prizePool
+    });
+    
+  } catch (error) {
+    console.error('Error getting prize pool:', error);
+    res.status(500).json({
+      error: 'Failed to get prize pool',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Get all prize pools
+ * GET /api/monetization/prize-pool
+ */
+router.get('/prize-pool', async (req, res) => {
+  try {
+    const prizePools = await PrizePool.find().sort({ periodStart: -1 });
+    
+    res.json({
+      success: true,
+      prizePools
+    });
+    
+  } catch (error) {
+    console.error('Error getting prize pools:', error);
+    res.status(500).json({
+      error: 'Failed to get prize pools',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Calculate winners for current prize pool
+ * POST /api/monetization/prize-pool/calculate-winners
+ */
+router.post('/prize-pool/calculate-winners', async (req, res) => {
+  try {
+    const prizePool = await PrizePool.getCurrentPrizePool();
+    
+    if (!prizePool) {
+      return res.status(404).json({
+        error: 'No active prize pool',
+        message: 'No active prize pool found'
+      });
+    }
+    
+    await prizePool.calculateWinners();
+    
+    res.json({
+      success: true,
+      message: 'Winners calculated successfully',
+      prizePool
+    });
+    
+  } catch (error) {
+    console.error('Error calculating winners:', error);
+    res.status(500).json({
+      error: 'Failed to calculate winners',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Distribute prizes
+ * POST /api/monetization/prize-pool/distribute
+ */
+router.post('/prize-pool/distribute', async (req, res) => {
+  try {
+    const { distributedBy } = req.body;
+    
+    const prizePool = await PrizePool.findOne({ status: 'calculating' });
+    
+    if (!prizePool) {
+      return res.status(404).json({
+        error: 'No prize pool ready for distribution',
+        message: 'No prize pool in calculating status found'
+      });
+    }
+    
+    await prizePool.distributePrizes(distributedBy);
+    
+    res.json({
+      success: true,
+      message: 'Prizes distributed successfully',
+      prizePool
+    });
+    
+  } catch (error) {
+    console.error('Error distributing prizes:', error);
+    res.status(500).json({
+      error: 'Failed to distribute prizes',
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// ADMIN STATISTICS
+// ============================================================================
+
+/**
+ * Get monetization statistics
+ * GET /api/monetization/stats
+ */
+router.get('/stats', async (req, res) => {
+  try {
+    const [membershipStats, prizePoolStats] = await Promise.all([
+      Membership.getMembershipStats(),
+      PrizePool.getPrizePoolStats()
+    ]);
+    
+    // Get current active memberships
+    const activeMemberships = await Membership.findActiveMemberships();
+    
+    // Get current prize pool
+    const currentPrizePool = await PrizePool.getCurrentPrizePool();
+    
+    const stats = {
+      memberships: {
+        total: membershipStats[0]?.count || 0,
+        active: activeMemberships.length,
+        revenue: membershipStats[0]?.totalRevenue || 0,
+        byTier: membershipStats
+      },
+      prizePools: {
+        total: prizePoolStats[0]?.totalCollected || 0,
+        distributed: prizePoolStats[0]?.totalDistributed || 0,
+        current: currentPrizePool?.currentBalance || 0,
+        activePools: prizePoolStats[0]?.activePools || 0
+      },
+      currentPeriod: currentPrizePool?.periodName || 'No active period'
+    };
+    
+    res.json({
+      success: true,
+      stats
+    });
+    
+  } catch (error) {
+    console.error('Error getting monetization stats:', error);
+    res.status(500).json({
+      error: 'Failed to get monetization stats',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Get expiring memberships
+ * GET /api/monetization/memberships/expiring
+ */
+router.get('/memberships/expiring', async (req, res) => {
+  try {
+    const { days = 7 } = req.query;
+    const expiringMemberships = await Membership.findExpiringMemberships(parseInt(days));
+    
+    res.json({
+      success: true,
+      expiringMemberships,
+      days: parseInt(days)
+    });
+    
+  } catch (error) {
+    console.error('Error getting expiring memberships:', error);
+    res.status(500).json({
+      error: 'Failed to get expiring memberships',
+      message: error.message
+    });
+  }
+});
+
+export default router;

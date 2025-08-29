@@ -10,6 +10,19 @@ import {
 
 const router = express.Router();
 
+// Basic platform admin endpoint for testing
+router.get('/', (req, res) => {
+  res.json({ 
+    message: 'Platform Admin API is working!',
+    endpoints: [
+      '/login',
+      '/leagues',
+      '/users',
+      '/system-status'
+    ]
+  });
+});
+
 // ============================================================================
 // AUTHENTICATION
 // ============================================================================

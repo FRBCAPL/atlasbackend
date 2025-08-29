@@ -40,15 +40,13 @@ export const login = async (req, res) => {
       
       for (const potentialUser of allLeagueUsers) {
         try {
-          if (potentialUser.pin && potentialUser.pin.length > 0) {
-            const isPinMatch = await potentialUser.comparePin(identifier);
-            if (isPinMatch) {
-              foundUser = potentialUser;
-              userType = 'league';
-              leagueUser = potentialUser;
-              console.log(`🔍 Found league user by PIN: ${foundUser.firstName} ${foundUser.lastName}`);
-              break;
-            }
+          // Check if the identifier matches the id field (which contains the PIN from Google Sheets)
+          if (potentialUser.id && potentialUser.id === identifier) {
+            foundUser = potentialUser;
+            userType = 'league';
+            leagueUser = potentialUser;
+            console.log(`🔍 Found league user by PIN (id field): ${foundUser.firstName} ${foundUser.lastName}`);
+            break;
           }
         } catch (error) {
           console.log(`🔍 Error checking PIN for ${potentialUser.firstName}: ${error.message}`);

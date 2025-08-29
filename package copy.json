@@ -1,0 +1,38 @@
+{
+  "name": "singles-league-app",
+  "version": "1.0.0",
+  "description": "Singles League Pool App - Full Stack Application",
+  "main": "index.js",
+  "scripts": {
+    "test": "node quick_functionality_test.js",
+    "test:full": "node run_full_functionality_test.js",
+    "test:quick": "node quick_functionality_test.js",
+    "test:comprehensive": "cd FrontEnd && node comprehensive_app_test.js",
+    "test:season": "cd FrontEnd && node full_season_test.js",
+    "test:backend": "cd atlasbackend && npm test",
+    "start:backend": "cd atlasbackend && npm start",
+    "start:frontend": "cd FrontEnd && npm run dev",
+    "dev": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "install:all": "npm install && cd atlasbackend && npm install && cd ../FrontEnd && npm install"
+  },
+  "keywords": [
+    "pool",
+    "league",
+    "singles",
+    "challenge",
+    "react",
+    "nodejs",
+    "express"
+  ],
+  "author": "Your Name",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "overrides": {
+    "react": "^18.3.1"
+  }
+}

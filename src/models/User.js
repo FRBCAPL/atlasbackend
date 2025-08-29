@@ -113,9 +113,9 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Method to compare PIN (plain text comparison)
+// Method to compare PIN (bcrypt comparison for hashed PINs)
 userSchema.methods.comparePin = async function(candidatePin) {
-  return this.pin === candidatePin;
+  return await bcrypt.compare(candidatePin, this.pin);
 };
 
 // Method to get full name

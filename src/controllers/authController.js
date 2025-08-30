@@ -1,310 +1,71 @@
-import User from '../models/User.js';
-import LadderPlayer from '../models/LadderPlayer.js';
+import UnifiedUser from '../models/UnifiedUser.js';
+import LeagueProfile from '../models/LeagueProfile.js';
+import LadderProfile from '../models/LadderProfile.js';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 export const login = async (req, res) => {
   try {
-    const { identifier } = req.body; // Can be email or PIN
+    const { identifier } = req.body;
 
-    console.log('🔍 Login attempt with identifier:', identifier);
-
-    if (!identifier) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email or PIN is required'
-      });
-    }
-
-    // Search both league and ladder databases
-    let foundUser = null;
-    let userType = null;
-    let foundInBoth = false;
-    let leagueUser = null;
-    let ladderPlayer = null;
-
-    // 1. Try to find in league database by email first
-    leagueUser = await User.findOne({ 
-      email: { $regex: new RegExp(`^${identifier}$`, 'i') }
+    // Find user by email or PIN
+    const user = await UnifiedUser.findOne({
+      $or: [
+        { email: identifier.toLowerCase() },
+        { pin: identifier }
+      ]
     });
 
-    if (leagueUser) {
-      foundUser = leagueUser;
-      userType = 'league';
-      console.log('🔍 Found league user by email:', `${leagueUser.firstName} ${leagueUser.lastName}`);
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
-    // 2. If not found by email, try to find by PIN in league database
-    if (!foundUser) {
-      console.log('🔍 Checking PIN for all league users...');
-      const allLeagueUsers = await User.find({});
-      
-      for (const potentialUser of allLeagueUsers) {
-        try {
-          // Check if the identifier matches the id field (which contains the PIN from Google Sheets)
-          if (potentialUser.id && potentialUser.id === identifier) {
-            foundUser = potentialUser;
-            userType = 'league';
-            leagueUser = potentialUser;
-            console.log(`🔍 Found league user by PIN (id field): ${foundUser.firstName} ${foundUser.lastName}`);
-            break;
-          }
-        } catch (error) {
-          console.log(`🔍 Error checking PIN for ${potentialUser.firstName}: ${error.message}`);
-          continue;
-        }
+    if (!user.isApproved) {
+      return res.status(401).json({ success: false, message: 'Account not approved' });
+    }
+
+    if (!user.isActive) {
+      return res.status(401).json({ success: false, message: 'Account is inactive' });
+    }
+
+    // Get user profiles
+    const [leagueProfile, ladderProfile] = await Promise.all([
+      LeagueProfile.findOne({ userId: user._id }),
+      LadderProfile.findOne({ userId: user._id })
+    ]);
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        userId: user._id, 
+        email: user.email,
+        role: user.role 
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    console.log(`✅ Login successful for ${user.email}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      token,
+      user: {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        isApproved: user.isApproved,
+        isActive: user.isActive,
+        leagueProfile,
+        ladderProfile
       }
-    }
-
-    // 3. Also check ladder database by email (even if we found league user)
-    ladderPlayer = await LadderPlayer.findOne({ 
-      email: { $regex: new RegExp(`^${identifier}$`, 'i') }
     });
-
-    if (ladderPlayer) {
-      console.log('🔍 Found ladder player by email:', `${ladderPlayer.firstName} ${ladderPlayer.lastName}`);
-      console.log('🔍 Debug - leagueUser exists:', !!leagueUser);
-      console.log('🔍 Debug - foundUser exists:', !!foundUser);
-      
-      // If we already found a league user, mark as found in both
-      if (leagueUser) {
-        foundInBoth = true;
-        console.log('🔍 User found in BOTH league and ladder systems!');
-      } else if (!foundUser) {
-        foundUser = ladderPlayer;
-        userType = 'ladder';
-      }
-    }
-
-    // 3.5. If we found a league user but no ladder player by email, check by name
-    if (leagueUser && !ladderPlayer) {
-      console.log('🔍 Checking ladder database by name for:', `${leagueUser.firstName} ${leagueUser.lastName}`);
-      ladderPlayer = await LadderPlayer.findOne({
-        firstName: { $regex: new RegExp(`^${leagueUser.firstName}$`, 'i') },
-        lastName: { $regex: new RegExp(`^${leagueUser.lastName}$`, 'i') }
-      });
-
-      if (ladderPlayer) {
-        console.log('🔍 Found ladder player by name:', `${ladderPlayer.firstName} ${ladderPlayer.lastName}`);
-        foundInBoth = true;
-        console.log('🔍 User found in BOTH league and ladder systems!');
-      }
-    }
-
-    // 4. If still not found, try PIN in ladder database
-    if (!foundUser) {
-      console.log('🔍 Checking PIN for all ladder players...');
-      const allLadderPlayers = await LadderPlayer.find({});
-      
-      for (const potentialPlayer of allLadderPlayers) {
-        try {
-          if (potentialPlayer.pin && potentialPlayer.pin.length > 0) {
-            const isPinMatch = await bcrypt.compare(identifier, potentialPlayer.pin);
-            if (isPinMatch) {
-              ladderPlayer = potentialPlayer;
-              console.log(`🔍 Found ladder player by PIN: ${potentialPlayer.firstName} ${potentialPlayer.lastName}`);
-              
-              // If we already found a league user, mark as found in both
-              if (leagueUser) {
-                foundInBoth = true;
-                console.log('🔍 User found in BOTH league and ladder systems!');
-              } else if (!foundUser) {
-                foundUser = potentialPlayer;
-                userType = 'ladder';
-              }
-              break;
-            }
-          }
-        } catch (error) {
-          console.log(`🔍 Error checking PIN for ${potentialPlayer.firstName}: ${error.message}`);
-          continue;
-        }
-      }
-    }
-
-    // 4.5. If we found a ladder player but no league user by email, check by name
-    if (ladderPlayer && !leagueUser) {
-      console.log('🔍 Checking league database by name for:', `${ladderPlayer.firstName} ${ladderPlayer.lastName}`);
-      leagueUser = await User.findOne({
-        firstName: { $regex: new RegExp(`^${ladderPlayer.firstName}$`, 'i') },
-        lastName: { $regex: new RegExp(`^${ladderPlayer.lastName}$`, 'i') }
-      });
-
-      if (leagueUser) {
-        console.log('🔍 Found league user by name:', `${leagueUser.firstName} ${leagueUser.lastName}`);
-        foundInBoth = true;
-        console.log('🔍 User found in BOTH league and ladder systems!');
-      }
-    }
-
-    if (!foundUser) {
-      return res.status(401).json({
-        success: false,
-        message: 'No user found with that email or PIN. You may need to claim your account.'
-      });
-    }
-
-    // Handle users found in both systems
-    if (foundInBoth) {
-      console.log('🔍 Returning combined user data for player in both systems');
-      console.log('🔍 Debug - foundInBoth:', foundInBoth);
-      console.log('🔍 Debug - leagueUser:', leagueUser ? `${leagueUser.firstName} ${leagueUser.lastName}` : 'null');
-      console.log('🔍 Debug - ladderPlayer:', ladderPlayer ? `${ladderPlayer.firstName} ${ladderPlayer.lastName}` : 'null');
-      
-      // Check if league user is approved and active
-      if (!leagueUser.isApproved) {
-        return res.status(401).json({
-          success: false,
-          message: 'Your league account is pending approval. Please contact an administrator.'
-        });
-      }
-
-      if (!leagueUser.isActive) {
-        return res.status(401).json({
-          success: false,
-          message: 'Your league account has been deactivated. Please contact an administrator.'
-        });
-      }
-
-      // Check if ladder player is active
-      if (!ladderPlayer.isActive) {
-        return res.status(401).json({
-          success: false,
-          message: 'Your ladder account has been deactivated. Please contact an administrator.'
-        });
-      }
-
-      // Update last login for both
-      await User.updateOne(
-        { _id: leagueUser._id },
-        { $set: { lastLogin: new Date() } }
-      );
-      await LadderPlayer.updateOne(
-        { _id: ladderPlayer._id },
-        { $set: { lastLogin: new Date() } }
-      );
-
-      // Return combined user data
-      res.json({
-        success: true,
-        userType: 'both',
-        user: {
-          firstName: leagueUser.firstName,
-          lastName: leagueUser.lastName,
-          email: leagueUser.email,
-          pin: identifier,
-          // League data
-          division: leagueUser.division,
-          divisions: leagueUser.divisions,
-          isAdmin: leagueUser.isAdmin,
-          phone: leagueUser.phone,
-          locations: leagueUser.locations,
-          availability: leagueUser.availability,
-          // Ladder data
-          fargoRate: ladderPlayer.fargoRate,
-          ladderName: ladderPlayer.ladderName,
-          position: ladderPlayer.position,
-          wins: ladderPlayer.wins || 0,
-          losses: ladderPlayer.losses || 0
-        }
-      });
-      return;
-    }
-
-    // Handle league users only
-    if (userType === 'league') {
-      // Check if user is approved
-      if (!foundUser.isApproved) {
-        return res.status(401).json({
-          success: false,
-          message: 'Your account is pending approval. Please contact an administrator.'
-        });
-      }
-
-      // Check if user is active
-      if (!foundUser.isActive) {
-        return res.status(401).json({
-          success: false,
-          message: 'Your account has been deactivated. Please contact an administrator.'
-        });
-      }
-
-      // Update last login
-      await User.updateOne(
-        { _id: foundUser._id },
-        { $set: { lastLogin: new Date() } }
-      );
-
-      // Return league user data
-      res.json({
-        success: true,
-        userType: 'league',
-        user: {
-          firstName: foundUser.firstName,
-          lastName: foundUser.lastName,
-          email: foundUser.email,
-          pin: identifier,
-          division: foundUser.division,
-          divisions: foundUser.divisions,
-          isAdmin: foundUser.isAdmin,
-          phone: foundUser.phone,
-          locations: foundUser.locations,
-          availability: foundUser.availability
-        }
-      });
-    }
-
-    // Handle ladder players
-    if (userType === 'ladder') {
-      // Check if player is active
-      if (!foundUser.isActive) {
-        return res.status(401).json({
-          success: false,
-          message: 'Your ladder account has been deactivated. Please contact an administrator.'
-        });
-      }
-
-      // Update last login
-      await LadderPlayer.updateOne(
-        { _id: foundUser._id },
-        { $set: { lastLogin: new Date() } }
-      );
-
-      // Return ladder player data
-      res.json({
-        success: true,
-        userType: 'ladder',
-        user: {
-          firstName: foundUser.firstName,
-          lastName: foundUser.lastName,
-          email: foundUser.email,
-          pin: identifier,
-          fargoRate: foundUser.fargoRate,
-          ladderName: foundUser.ladderName,
-          position: foundUser.position,
-          wins: foundUser.wins || 0,
-          losses: foundUser.losses || 0
-        }
-      });
-    }
-
   } catch (error) {
     console.error('Login error:', error);
-    
-    // Provide more specific error messages based on the error type
-    let errorMessage = 'Internal server error during login';
-    
-    if (error.name === 'ValidationError') {
-      errorMessage = 'Invalid input data provided';
-    } else if (error.name === 'CastError') {
-      errorMessage = 'Invalid user data format';
-    } else if (error.code === 11000) {
-      errorMessage = 'Duplicate user entry detected';
-    }
-    
-    res.status(500).json({
-      success: false,
-      message: errorMessage
-    });
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
 
@@ -319,7 +80,7 @@ export const validatePin = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ 
+    const user = await UnifiedUser.findOne({ 
       email: { $regex: new RegExp(`^${email}$`, 'i') }
     });
 
@@ -330,15 +91,50 @@ export const validatePin = async (req, res) => {
       });
     }
 
-    const isValidPin = await user.comparePin(pin);
+    // Check if user is approved and active
+    if (!user.isApproved) {
+      return res.status(401).json({
+        success: false,
+        message: 'Your account is pending approval. Please contact an administrator.'
+      });
+    }
+
+    if (!user.isActive) {
+      return res.status(401).json({
+        success: false,
+        message: 'Your account has been deactivated. Please contact an administrator.'
+      });
+    }
+
+    // Validate PIN
+    let isValidPin = false;
+    if (user.pin) {
+      if (user.pin.startsWith('$2a$')) {
+        // Hashed PIN
+        isValidPin = await bcrypt.compare(pin, user.pin);
+      } else {
+        // Plain text PIN
+        isValidPin = user.pin === pin;
+      }
+    }
 
     res.json({
       success: true,
-      isValid: isValidPin
+      isValid: isValidPin,
+      user: {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        isAdmin: user.isAdmin,
+        isSuperAdmin: user.isSuperAdmin,
+        isPlatformAdmin: user.isPlatformAdmin,
+        role: user.role
+      }
     });
 
   } catch (error) {
-    console.error('PIN validation error:', error);
+    console.error('❌ PIN validation error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error during PIN validation'
@@ -346,164 +142,132 @@ export const validatePin = async (req, res) => {
   }
 };
 
-// Account claiming functions for ladder players
+// Account claiming functions for ladder players (keep for backward compatibility)
 export const searchLadderPlayer = async (req, res) => {
   try {
-    const { firstName, lastName } = req.body;
+    const { email } = req.body;
 
-    if (!firstName || !lastName) {
+    if (!email) {
       return res.status(400).json({
         success: false,
-        message: 'First name and last name are required'
+        message: 'Email is required'
       });
     }
 
-    // Search for ladder player by name (case-insensitive)
-    const ladderPlayer = await LadderPlayer.findOne({
-      firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
-      lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+    // Check if user exists in unified system
+    const unifiedUser = await UnifiedUser.findOne({ 
+      email: { $regex: new RegExp(`^${email}$`, 'i') }
     });
 
-    if (!ladderPlayer) {
-      return res.status(404).json({
-        success: false,
-        message: 'No ladder player found with that name'
+    if (unifiedUser) {
+      const ladderProfile = await LadderProfile.findOne({ userId: unifiedUser._id });
+      
+      return res.json({
+        success: true,
+        found: true,
+        user: {
+          id: unifiedUser._id,
+          firstName: unifiedUser.firstName,
+          lastName: unifiedUser.lastName,
+          email: unifiedUser.email,
+          hasLadderProfile: !!ladderProfile
+        },
+        message: 'User found in unified system'
       });
     }
 
-    // Check if they already have a user account
-    const existingUser = await User.findOne({
-      firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
-      lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
-    });
-
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'This player already has an account. Please log in instead.'
-      });
-    }
-
-    // Return ladder player info (without sensitive data)
     res.json({
       success: true,
-      player: {
-        firstName: ladderPlayer.firstName,
-        lastName: ladderPlayer.lastName,
-        position: ladderPlayer.position,
-        fargoRate: ladderPlayer.fargoRate,
-        wins: ladderPlayer.wins,
-        losses: ladderPlayer.losses
-      }
+      found: false,
+      message: 'User not found in unified system'
     });
 
   } catch (error) {
-    console.error('Search ladder player error:', error);
+    console.error('❌ Search ladder player error:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error during search'
+      message: 'Internal server error searching for player'
     });
   }
 };
 
 export const submitAccountClaim = async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, message } = req.body;
+    const { email, firstName, lastName, phone, claimMessage } = req.body;
 
-    if (!firstName || !lastName || !email) {
+    if (!email || !firstName || !lastName) {
       return res.status(400).json({
         success: false,
-        message: 'First name, last name, and email are required'
+        message: 'Email, first name, and last name are required'
       });
     }
 
-    // Verify the ladder player exists
-    const ladderPlayer = await LadderPlayer.findOne({
-      firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
-      lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+    // Check if user already exists in unified system
+    const existingUser = await UnifiedUser.findOne({ 
+      email: { $regex: new RegExp(`^${email}$`, 'i') }
     });
 
-    if (!ladderPlayer) {
-      return res.status(404).json({
-        success: false,
-        message: 'No ladder player found with that name'
-      });
-    }
-
-    // Check if claim already exists
-    const existingClaim = await User.findOne({
-      firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
-      lastName: { $regex: new RegExp(`^${lastName}$`, 'i') },
-      isPendingApproval: true
-    });
-
-    if (existingClaim) {
+    if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: 'An account claim is already pending for this player'
+        message: 'User already exists in unified system'
       });
     }
 
-    // Create pending user account
-    const pendingUser = new User({
-      firstName: ladderPlayer.firstName,
-      lastName: ladderPlayer.lastName,
+    // Create new unified user for claim
+    const newUser = new UnifiedUser({
+      firstName,
+      lastName,
       email: email.toLowerCase(),
-      phone: phone || '',
+      phone,
       isPendingApproval: true,
       isApproved: false,
       isActive: false,
-      isAdmin: false,
       role: 'player',
-      claimMessage: message || '',
-      ladderPlayerId: ladderPlayer._id
+      claimMessage,
+      registrationDate: new Date()
     });
 
-    await pendingUser.save();
+    await newUser.save();
+
+    console.log(`✅ Account claim submitted for: ${firstName} ${lastName} (${email})`);
 
     res.json({
       success: true,
-      message: 'Account claim submitted successfully. An admin will review your request.'
+      message: 'Account claim submitted successfully. Please wait for admin approval.'
     });
 
   } catch (error) {
-    console.error('Submit account claim error:', error);
+    console.error('❌ Submit account claim error:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error during claim submission'
+      message: 'Internal server error submitting claim'
     });
   }
 };
 
 export const getPendingClaims = async (req, res) => {
   try {
-    const pendingUsers = await User.find({ 
-      isPendingApproval: true 
-    }).populate('ladderPlayerId');
-
-    const claims = pendingUsers.map(user => ({
-      id: user._id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-      phone: user.phone,
-      claimMessage: user.claimMessage,
-      ladderInfo: user.ladderPlayerId ? {
-        position: user.ladderPlayerId.position,
-        fargoRate: user.ladderPlayerId.fargoRate,
-        wins: user.ladderPlayerId.wins,
-        losses: user.ladderPlayerId.losses
-      } : null,
-      submittedAt: user.createdAt
-    }));
+    const pendingUsers = await UnifiedUser.find({ 
+      isPendingApproval: true,
+      isApproved: false
+    }).sort({ registrationDate: 1 });
 
     res.json({
       success: true,
-      claims: claims
+      claims: pendingUsers.map(user => ({
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        claimMessage: user.claimMessage,
+        registrationDate: user.registrationDate
+      }))
     });
 
   } catch (error) {
-    console.error('Get pending claims error:', error);
+    console.error('❌ Get pending claims error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error getting pending claims'
@@ -513,41 +277,25 @@ export const getPendingClaims = async (req, res) => {
 
 export const approveAccountClaim = async (req, res) => {
   try {
-    const { claimId, pin } = req.body;
+    const { userId } = req.params;
 
-    if (!claimId || !pin) {
-      return res.status(400).json({
-        success: false,
-        message: 'Claim ID and PIN are required'
-      });
-    }
-
-    const pendingUser = await User.findById(claimId);
-
-    if (!pendingUser) {
+    const user = await UnifiedUser.findById(userId);
+    if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'Pending claim not found'
+        message: 'User not found'
       });
     }
 
-    if (!pendingUser.isPendingApproval) {
-      return res.status(400).json({
-        success: false,
-        message: 'This claim has already been processed'
-      });
-    }
+    user.isPendingApproval = false;
+    user.isApproved = true;
+    user.isActive = true;
+    user.approvalDate = new Date();
+    user.approvedBy = req.body.approvedBy || 'admin';
 
-    // Hash the PIN and activate the account
-    const hashedPin = await bcrypt.hash(pin, 10);
-    
-    await User.findByIdAndUpdate(claimId, {
-      pin: hashedPin,
-      isPendingApproval: false,
-      isApproved: true,
-      isActive: true,
-      approvedAt: new Date()
-    });
+    await user.save();
+
+    console.log(`✅ Account claim approved for: ${user.firstName} ${user.lastName}`);
 
     res.json({
       success: true,
@@ -555,43 +303,30 @@ export const approveAccountClaim = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Approve account claim error:', error);
+    console.error('❌ Approve account claim error:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error during approval'
+      message: 'Internal server error approving claim'
     });
   }
 };
 
 export const rejectAccountClaim = async (req, res) => {
   try {
-    const { claimId, reason } = req.body;
+    const { userId } = req.params;
+    const { reason } = req.body;
 
-    if (!claimId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Claim ID is required'
-      });
-    }
-
-    const pendingUser = await User.findById(claimId);
-
-    if (!pendingUser) {
+    const user = await UnifiedUser.findById(userId);
+    if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'Pending claim not found'
+        message: 'User not found'
       });
     }
 
-    if (!pendingUser.isPendingApproval) {
-      return res.status(400).json({
-        success: false,
-        message: 'This claim has already been processed'
-      });
-    }
+    await UnifiedUser.findByIdAndDelete(userId);
 
-    // Delete the pending user
-    await User.findByIdAndDelete(claimId);
+    console.log(`❌ Account claim rejected for: ${user.firstName} ${user.lastName}`);
 
     res.json({
       success: true,
@@ -599,10 +334,10 @@ export const rejectAccountClaim = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Reject account claim error:', error);
+    console.error('❌ Reject account claim error:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error during rejection'
+      message: 'Internal server error rejecting claim'
     });
   }
 };

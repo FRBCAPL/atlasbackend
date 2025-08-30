@@ -6,124 +6,56 @@ import LadderPlayer from '../models/LadderPlayer.js';
 
 export const getAllUsers = async (req, res) => {
   try {
-    // Fetch all league players
-    const leaguePlayers = await User.find({}).lean();
+    // Use unified system instead of old User and LadderPlayer models
+    const UnifiedUser = (await import('../models/UnifiedUser.js')).default;
+    const LeagueProfile = (await import('../models/LeagueProfile.js')).default;
+    const LadderProfile = (await import('../models/LadderProfile.js')).default;
     
-    // Fetch all ladder players
-    const ladderPlayers = await LadderPlayer.find({}).lean();
+    const unifiedUsers = await UnifiedUser.find({}).lean();
     
-    // Create maps to track players by email and by name
-    const playerMapByEmail = new Map();
-    const playerMapByName = new Map();
-    
-         // Add league players
-     leaguePlayers.forEach(player => {
+    // Transform unified users to match the expected format for admin interface
+    const users = await Promise.all(unifiedUsers.map(async (user) => {
+      const leagueProfile = await LeagueProfile.findOne({ userId: user._id }).lean();
+      const ladderProfile = await LadderProfile.findOne({ userId: user._id }).lean();
       
-      const playerData = {
-        ...player,
-        system: 'league',
-        isLeaguePlayer: true,
-        isLadderPlayer: false
-      };
-      
-      // Store by email if available
-      if (player.email) {
-        playerMapByEmail.set(player.email, playerData);
+      // Determine system type based on profiles
+      let system = 'none';
+      if (leagueProfile && ladderProfile) {
+        system = 'both';
+      } else if (leagueProfile) {
+        system = 'league';
+      } else if (ladderProfile) {
+        system = 'ladder';
       }
       
-      // Store by name for matching players without emails
-      const nameKey = `${player.firstName?.toLowerCase()}-${player.lastName?.toLowerCase()}`;
-      playerMapByName.set(nameKey, playerData);
-    });
+      return {
+        ...user,
+        system: system,
+        isLeaguePlayer: !!leagueProfile,
+        isLadderPlayer: !!ladderProfile,
+        divisions: leagueProfile?.divisions || [],
+        locations: leagueProfile?.locations || user.locations,
+        availability: leagueProfile?.availability || user.availability,
+        emergencyContactName: leagueProfile?.emergencyContactName || user.emergencyContactName,
+        emergencyContactPhone: leagueProfile?.emergencyContactPhone || user.emergencyContactPhone,
+        textNumber: leagueProfile?.textNumber || user.textNumber,
+        notes: leagueProfile?.notes || user.notes,
+        // Ladder info if available
+        ladderName: ladderProfile?.ladderName,
+        position: ladderProfile?.position,
+        fargoRate: ladderProfile?.fargoRate,
+        ladderInfo: ladderProfile ? {
+          ladderName: ladderProfile.ladderName,
+          position: ladderProfile.position,
+          fargoRate: ladderProfile.fargoRate,
+          isActive: ladderProfile.isActive
+        } : null
+      };
+    }));
     
-              // Add ladder players and check for duplicates
-     ladderPlayers.forEach(player => {
-       
-       const nameKey = `${player.firstName?.toLowerCase()}-${player.lastName?.toLowerCase()}`;
-       const ladderInfo = {
-         ladderName: player.ladderName,
-         position: player.position,
-         fargoRate: player.fargoRate,
-         isActive: player.isActive
-       };
-       
-               // Check if player has a valid email (not undefined, null, or empty)
-        const hasValidEmail = player.email && 
-                             player.email !== 'undefined' && 
-                             player.email !== 'null' && 
-                             player.email.trim() !== '';
-
-        // Check if player exists in both systems by email
-        if (hasValidEmail && playerMapByEmail.has(player.email)) {
-          const existingPlayer = playerMapByEmail.get(player.email);
-          playerMapByEmail.set(player.email, {
-            ...existingPlayer,
-            system: 'both',
-            isLeaguePlayer: true,
-            isLadderPlayer: true,
-            ladderInfo
-          });
-        }
-        // Check if player exists in both systems by name (for players without emails)
-        else if (playerMapByName.has(nameKey)) {
-          const existingPlayer = playerMapByName.get(nameKey);
-          
-          // Update the existing player with ladder info
-          const updatedPlayer = {
-            ...existingPlayer,
-            system: 'both',
-            isLeaguePlayer: true,
-            isLadderPlayer: true,
-            ladderInfo
-          };
-          
-          // Update both maps
-          if (existingPlayer.email) {
-            playerMapByEmail.set(existingPlayer.email, updatedPlayer);
-          }
-          playerMapByName.set(nameKey, updatedPlayer);
-                 } else {
-            // Player only in ladder
-            const ladderPlayerData = {
-              ...player,
-              system: 'ladder',
-              isLeaguePlayer: false,
-              isLadderPlayer: true,
-              // For ladder-only players, ladder info is directly on the object
-              ladderName: player.ladderName,
-              position: player.position,
-              fargoRate: player.fargoRate,
-              isActive: player.isActive
-            };
-            
-            // Only add to email map if they have a valid email
-            if (hasValidEmail) {
-              playerMapByEmail.set(player.email, ladderPlayerData);
-            }
-            playerMapByName.set(nameKey, ladderPlayerData);
-          }
-     });
-    
-         // Combine all players from both maps
-     const allPlayers = Array.from(playerMapByEmail.values());
-     
-     // Add players that only exist in the name map (players without emails)
-     playerMapByName.forEach((player, nameKey) => {
-       if (!player.email || !playerMapByEmail.has(player.email)) {
-         allPlayers.push(player);
-       }
-     });
-    
-    // Sort players alphabetically by first name
-    allPlayers.sort((a, b) => {
-      const firstNameA = (a.firstName || '').toLowerCase();
-      const firstNameB = (b.firstName || '').toLowerCase();
-      return firstNameA.localeCompare(firstNameB);
-    });
-    
-    res.json(allPlayers);
-  } catch (err) {
-    console.error('Error fetching all users:', err);
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching all users:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 };
@@ -133,6 +65,11 @@ export const searchUsers = async (req, res) => {
   try {
     const { approved, division, search } = req.query;
     
+    // Use unified system instead of old User model
+    const UnifiedUser = (await import('../models/UnifiedUser.js')).default;
+    const LeagueProfile = (await import('../models/LeagueProfile.js')).default;
+    const LadderProfile = (await import('../models/LadderProfile.js')).default;
+    
     let query = {};
     
     // Filter by approval status
@@ -140,14 +77,6 @@ export const searchUsers = async (req, res) => {
       query.isApproved = true;
     } else if (approved === 'false') {
       query.isApproved = false;
-    }
-    
-    // Filter by division
-    if (division) {
-      query.$or = [
-        { division: division },
-        { divisions: { $in: [division] } }
-      ];
     }
     
     // Search by name or email
@@ -159,15 +88,62 @@ export const searchUsers = async (req, res) => {
       ];
     }
     
-    const users = await User.find(query)
-      .select('firstName lastName email phone locations availability preferredContacts division divisions isApproved paymentHistory penalties')
-      .lean();
+    const unifiedUsers = await UnifiedUser.find(query).lean();
     
-
+    // Transform unified users to match the expected format for admin interface
+    const users = await Promise.all(unifiedUsers.map(async (user) => {
+      const leagueProfile = await LeagueProfile.findOne({ userId: user._id }).lean();
+      const ladderProfile = await LadderProfile.findOne({ userId: user._id }).lean();
+      
+      // Determine system type based on profiles
+      let system = 'none';
+      if (leagueProfile && ladderProfile) {
+        system = 'both';
+      } else if (leagueProfile) {
+        system = 'league';
+      } else if (ladderProfile) {
+        system = 'ladder';
+      }
+      
+      // Filter by division if specified
+      if (division) {
+        const userDivisions = leagueProfile?.divisions || [];
+        if (!userDivisions.includes(division)) {
+          return null; // Skip this user
+        }
+      }
+      
+      return {
+        ...user,
+        system: system,
+        isLeaguePlayer: !!leagueProfile,
+        isLadderPlayer: !!ladderProfile,
+        divisions: leagueProfile?.divisions || [],
+        locations: leagueProfile?.locations || user.locations,
+        availability: leagueProfile?.availability || user.availability,
+        emergencyContactName: leagueProfile?.emergencyContactName || user.emergencyContactName,
+        emergencyContactPhone: leagueProfile?.emergencyContactPhone || user.emergencyContactPhone,
+        textNumber: leagueProfile?.textNumber || user.textNumber,
+        notes: leagueProfile?.notes || user.notes,
+        // Ladder info if available
+        ladderName: ladderProfile?.ladderName,
+        position: ladderProfile?.position,
+        fargoRate: ladderProfile?.fargoRate,
+        ladderInfo: ladderProfile ? {
+          ladderName: ladderProfile.ladderName,
+          position: ladderProfile.position,
+          fargoRate: ladderProfile.fargoRate,
+          isActive: ladderProfile.isActive
+        } : null
+      };
+    }));
+    
+    // Filter out null values (users that didn't match division filter)
+    const filteredUsers = users.filter(user => user !== null);
     
     res.json({
       success: true,
-      users: users
+      users: filteredUsers
     });
   } catch (err) {
     console.error('Error searching users:', err);
@@ -548,27 +524,23 @@ export const updateUser = async (req, res) => {
     delete updateData.pin; // Don't allow PIN updates via this endpoint
     delete updateData.isAdmin; // Don't allow admin status updates via this endpoint
 
-    // First, try to find the user in the User collection
-    let user = await User.findById(userId);
-    let isLadderPlayer = false;
+    // Use unified system instead of old User and LadderPlayer models
+    const UnifiedUser = (await import('../models/UnifiedUser.js')).default;
+    const LeagueProfile = (await import('../models/LeagueProfile.js')).default;
+    const LadderProfile = (await import('../models/LadderProfile.js')).default;
 
-    // If not found in User collection, check LadderPlayer collection
-    if (!user) {
-      const ladderPlayer = await LadderPlayer.findById(userId);
-      if (ladderPlayer) {
-        isLadderPlayer = true;
-        user = ladderPlayer;
-      } else {
+    // Find the unified user
+    const unifiedUser = await UnifiedUser.findById(userId);
+    if (!unifiedUser) {
         return res.status(404).json({
           success: false,
-          message: 'Player not found in either User or LadderPlayer collections'
+        message: 'Player not found in unified system'
         });
-      }
     }
 
-    // If updating email, check if it already exists in User collection
+    // If updating email, check if it already exists
     if (updateData.email && updateData.email.trim() !== '') {
-      const existingUser = await User.findOne({ 
+      const existingUser = await UnifiedUser.findOne({ 
         email: updateData.email.toLowerCase(),
         _id: { $ne: userId } // Exclude current user
       });
@@ -584,50 +556,94 @@ export const updateUser = async (req, res) => {
       updateData.email = updateData.email.toLowerCase();
     }
 
-    let updatedUser;
-    if (isLadderPlayer) {
-      // Update LadderPlayer
-      updatedUser = await LadderPlayer.findByIdAndUpdate(
+    // Separate unified user data from profile data
+    const unifiedUserData = {
+      firstName: updateData.firstName,
+      lastName: updateData.lastName,
+      email: updateData.email,
+      phone: updateData.phone,
+      isApproved: updateData.isApproved,
+      isActive: updateData.isActive,
+      role: updateData.role
+    };
+
+    // League profile data
+    const leagueProfileData = {
+      divisions: updateData.divisions,
+      locations: updateData.locations,
+      availability: updateData.availability,
+      emergencyContactName: updateData.emergencyContactName,
+      emergencyContactPhone: updateData.emergencyContactPhone,
+      textNumber: updateData.textNumber,
+      notes: updateData.notes
+    };
+
+    // Ladder profile data
+    const ladderProfileData = {
+      ladderName: updateData.ladderName,
+      position: updateData.position,
+      fargoRate: updateData.fargoRate,
+      isActive: updateData.isActive
+    };
+
+    // Update unified user
+    const updatedUnifiedUser = await UnifiedUser.findByIdAndUpdate(
         userId,
         { 
-          ...updateData,
+        ...unifiedUserData,
           lastProfileUpdate: new Date()
         },
+      { new: true, runValidators: false }
+    );
+
+    // Update or create league profile
+    let leagueProfile = await LeagueProfile.findOne({ userId });
+    if (leagueProfile) {
+      await LeagueProfile.findByIdAndUpdate(
+        leagueProfile._id,
+        { ...leagueProfileData },
         { new: true, runValidators: false }
       );
-    } else {
-      // Update User
-      updatedUser = await User.findByIdAndUpdate(
+    } else if (Object.values(leagueProfileData).some(val => val !== undefined && val !== null && val !== '')) {
+      // Create league profile if there's data to save
+      leagueProfile = new LeagueProfile({
         userId,
-        { 
-          ...updateData,
-          lastProfileUpdate: new Date()
-        },
-        { new: true, runValidators: false } // Disable validation to avoid preferredContacts issues
-      );
+        ...leagueProfileData
+      });
+      await leagueProfile.save();
     }
 
-    if (!updatedUser) {
-      return res.status(404).json({
-        success: false,
-        message: 'Player not found'
+    // Update or create ladder profile
+    let ladderProfile = await LadderProfile.findOne({ userId });
+    if (ladderProfile) {
+      await LadderProfile.findByIdAndUpdate(
+        ladderProfile._id,
+        { ...ladderProfileData },
+        { new: true, runValidators: false }
+      );
+    } else if (Object.values(ladderProfileData).some(val => val !== undefined && val !== null && val !== '')) {
+      // Create ladder profile if there's data to save
+      ladderProfile = new LadderProfile({
+        userId,
+        ...ladderProfileData
       });
+      await ladderProfile.save();
     }
 
     res.json({
       success: true,
-      message: 'Player updated successfully',
+      message: 'Player updated successfully in unified system',
       user: {
-        _id: updatedUser._id,
-        firstName: updatedUser.firstName,
-        lastName: updatedUser.lastName,
-        email: updatedUser.email,
-        phone: updatedUser.phone,
-        isApproved: updatedUser.isApproved,
-        isActive: updatedUser.isActive,
-        divisions: updatedUser.divisions,
-        locations: updatedUser.locations,
-        notes: updatedUser.notes
+        _id: updatedUnifiedUser._id,
+        firstName: updatedUnifiedUser.firstName,
+        lastName: updatedUnifiedUser.lastName,
+        email: updatedUnifiedUser.email,
+        phone: updatedUnifiedUser.phone,
+        isApproved: updatedUnifiedUser.isApproved,
+        isActive: updatedUnifiedUser.isActive,
+        divisions: leagueProfile?.divisions || [],
+        locations: leagueProfile?.locations || updatedUnifiedUser.locations,
+        notes: leagueProfile?.notes || updatedUnifiedUser.notes
       }
     });
 

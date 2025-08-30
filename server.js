@@ -22,6 +22,7 @@ dotenv.config();
 // Import routes
 import apiRoutes from './src/routes/index.js';
 import Division from './src/models/Division.js';
+import unifiedAuthRoutes from './src/routes/unifiedAuth.js';
 
 // Import security middleware
 import { 
@@ -394,6 +395,9 @@ async function startServer() {
 
   // API routes
   app.use('/api', apiRoutes);
+  
+  // Unified authentication routes
+  app.use('/api/unified-auth', unifiedAuthRoutes);
 
   // Error handling middleware (must be last)
   app.use(errorLogger);
@@ -621,8 +625,12 @@ async function startServer() {
         return res.json([]);
       }
       
-      const { default: User } = await import('./src/models/User.js');
-      const users = await User.find({
+      // Use unified system instead of old User model
+      const { default: UnifiedUser } = await import('./src/models/UnifiedUser.js');
+      const { default: LeagueProfile } = await import('./src/models/LeagueProfile.js');
+      const { default: LadderProfile } = await import('./src/models/LadderProfile.js');
+      
+      const unifiedUsers = await UnifiedUser.find({
         $or: [
           { firstName: { $regex: query, $options: 'i' } },
           { lastName: { $regex: query, $options: 'i' } },
@@ -630,6 +638,46 @@ async function startServer() {
           { phone: { $regex: query, $options: 'i' } }
         ]
       }).lean();
+      
+      // Transform unified users to match the expected format for admin interface
+      const users = await Promise.all(unifiedUsers.map(async (user) => {
+        const leagueProfile = await LeagueProfile.findOne({ userId: user._id }).lean();
+        const ladderProfile = await LadderProfile.findOne({ userId: user._id }).lean();
+        
+        // Determine system type based on profiles
+        let system = 'none';
+        if (leagueProfile && ladderProfile) {
+          system = 'both';
+        } else if (leagueProfile) {
+          system = 'league';
+        } else if (ladderProfile) {
+          system = 'ladder';
+        }
+        
+        return {
+          ...user,
+          system: system,
+          isLeaguePlayer: !!leagueProfile,
+          isLadderPlayer: !!ladderProfile,
+          divisions: leagueProfile?.divisions || [],
+          locations: leagueProfile?.locations || user.locations,
+          availability: leagueProfile?.availability || user.availability,
+          emergencyContactName: leagueProfile?.emergencyContactName || user.emergencyContactName,
+          emergencyContactPhone: leagueProfile?.emergencyContactPhone || user.emergencyContactPhone,
+          textNumber: leagueProfile?.textNumber || user.textNumber,
+          notes: leagueProfile?.notes || user.notes,
+          // Ladder info if available
+          ladderName: ladderProfile?.ladderName,
+          position: ladderProfile?.position,
+          fargoRate: ladderProfile?.fargoRate,
+          ladderInfo: ladderProfile ? {
+            ladderName: ladderProfile.ladderName,
+            position: ladderProfile.position,
+            fargoRate: ladderProfile.fargoRate,
+            isActive: ladderProfile.isActive
+          } : null
+        };
+      }));
       
       res.json(users);
     } catch (err) {
@@ -669,23 +717,34 @@ async function startServer() {
         return res.status(400).json({ error: 'Division is required' });
       }
       
-      const { default: User } = await import('./src/models/User.js');
-      const user = await User.findOne({ $or: [{ email: userId }, { id: userId }] });
+      // Use unified system instead of old User model
+      const { default: UnifiedUser } = await import('./src/models/UnifiedUser.js');
+      const { default: LeagueProfile } = await import('./src/models/LeagueProfile.js');
       
-      if (!user) {
-        return res.status(404).json({ error: 'User not found' });
+      const unifiedUser = await UnifiedUser.findById(userId);
+      
+      if (!unifiedUser) {
+        return res.status(404).json({ error: 'User not found in unified system' });
       }
       
-      if (!user.divisions) {
-        user.divisions = [];
+      // Find or create league profile
+      let leagueProfile = await LeagueProfile.findOne({ userId });
+      if (!leagueProfile) {
+        leagueProfile = new LeagueProfile({ userId, divisions: [] });
       }
       
-      if (!user.divisions.includes(division)) {
-        user.divisions.push(division);
-        await user.save();
+      // Initialize divisions array if it doesn't exist
+      if (!leagueProfile.divisions) {
+        leagueProfile.divisions = [];
       }
       
-      res.json({ success: true, user });
+      // Add division if not already present
+      if (!leagueProfile.divisions.includes(division)) {
+        leagueProfile.divisions.push(division);
+        await leagueProfile.save();
+      }
+      
+      res.json({ success: true, user: unifiedUser });
     } catch (err) {
       console.error('Error adding division to user:', err);
       res.status(500).json({ error: 'Failed to add division to user' });
@@ -701,19 +760,25 @@ async function startServer() {
         return res.status(400).json({ error: 'Division is required' });
       }
       
-      const { default: User } = await import('./src/models/User.js');
-      const user = await User.findOne({ $or: [{ email: userId }, { id: userId }] });
+      // Use unified system instead of old User model
+      const { default: UnifiedUser } = await import('./src/models/UnifiedUser.js');
+      const { default: LeagueProfile } = await import('./src/models/LeagueProfile.js');
       
-      if (!user) {
-        return res.status(404).json({ error: 'User not found' });
+      const unifiedUser = await UnifiedUser.findById(userId);
+      
+      if (!unifiedUser) {
+        return res.status(404).json({ error: 'User not found in unified system' });
       }
       
-      if (user.divisions) {
-        user.divisions = user.divisions.filter(d => d !== division);
-        await user.save();
+      // Find league profile
+      const leagueProfile = await LeagueProfile.findOne({ userId });
+      
+      if (leagueProfile && leagueProfile.divisions) {
+        leagueProfile.divisions = leagueProfile.divisions.filter(d => d !== division);
+        await leagueProfile.save();
       }
       
-      res.json({ success: true, user });
+      res.json({ success: true, user: unifiedUser });
     } catch (err) {
       console.error('Error removing division from user:', err);
       res.status(500).json({ error: 'Failed to remove division from user' });

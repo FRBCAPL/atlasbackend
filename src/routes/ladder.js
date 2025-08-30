@@ -347,6 +347,50 @@ router.get('/player/:email/challenges', async (req, res) => {
   }
 });
 
+// Get challenges sent by a player
+router.get('/challenges/sent/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const player = await LadderPlayer.getPlayerByEmail(email);
+    
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    
+    const sentChallenges = await LadderChallenge.find({
+      challenger: player._id,
+      status: { $in: ['pending', 'accepted', 'scheduled'] }
+    }).populate('defender', 'firstName lastName email ladderName position');
+    
+    res.json(sentChallenges);
+  } catch (error) {
+    console.error('Error fetching sent challenges:', error);
+    res.status(500).json({ error: 'Failed to fetch sent challenges' });
+  }
+});
+
+// Get challenges pending for a player
+router.get('/challenges/pending/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const player = await LadderPlayer.getPlayerByEmail(email);
+    
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    
+    const pendingChallenges = await LadderChallenge.find({
+      defender: player._id,
+      status: 'pending'
+    }).populate('challenger', 'firstName lastName email ladderName position');
+    
+    res.json(pendingChallenges);
+  } catch (error) {
+    console.error('Error fetching pending challenges:', error);
+    res.status(500).json({ error: 'Failed to fetch pending challenges' });
+  }
+});
+
 // Accept a challenge
 router.post('/challenge/:challengeId/accept', async (req, res) => {
   try {
@@ -913,8 +957,16 @@ router.get('/player-status/:email', async (req, res) => {
     // Check if player exists in league database
     const leaguePlayer = await User.findOne({ email: email.toLowerCase() });
     
-    // Check if player exists in ladder database
-    const ladderPlayer = await LadderPlayer.findOne({ email: email.toLowerCase() });
+    // Check if player exists in ladder database (by email OR by name if league player exists)
+    let ladderPlayer = await LadderPlayer.findOne({ email: email.toLowerCase() });
+    
+    // If no ladder player found by email but league player exists, try to find by name
+    if (!ladderPlayer && leaguePlayer) {
+      ladderPlayer = await LadderPlayer.findOne({
+        firstName: { $regex: new RegExp(`^${leaguePlayer.firstName}$`, 'i') },
+        lastName: { $regex: new RegExp(`^${leaguePlayer.lastName}$`, 'i') }
+      });
+    }
     
     const response = {
       isLeaguePlayer: !!leaguePlayer,

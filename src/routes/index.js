@@ -23,6 +23,9 @@ import ladderRoutes from './ladder.js';
 // Platform admin routes
 import platformAdminRoutes from './platformAdmin.js';
 
+// Unified auth routes
+import unifiedAuthRoutes from './unifiedAuth.js';
+
 // Monetization routes
 import monetizationRoutes from './monetization.js';
 
@@ -48,6 +51,9 @@ router.use('/ladder', ladderRoutes);
 
 // Platform admin routes
 router.use('/platform', platformAdminRoutes);
+
+// Unified auth routes
+router.use('/unified-auth', unifiedAuthRoutes);
 
 // Monetization routes
 router.use('/monetization', monetizationRoutes);

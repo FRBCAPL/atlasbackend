@@ -35,6 +35,18 @@ const unifiedUserSchema = new mongoose.Schema({
     emailNotifications: { type: Boolean, default: true }
   },
   
+  // Profile Data - Shared for both League and Ladder
+  profile: {
+    // Basic Info
+    firstName: { type: String, trim: true },
+    lastName: { type: String, trim: true },
+    phone: { type: String, trim: true },
+    
+    // Shared data for both apps
+    availability: { type: Object, default: {} },
+    locations: { type: String, default: '' }
+  },
+  
   // Metadata
   notes: { type: String },
   claimMessage: { type: String }

@@ -5,6 +5,9 @@ import {
   claimUnifiedAccount,
   updateUnifiedProfile,
   changeUnifiedPin,
+  copyProfileData,
+  checkProfileCompleteness,
+  getProfileData,
   // Admin endpoints
   getAllUnifiedUsers,
   searchUnifiedUsers,
@@ -28,9 +31,19 @@ router.post('/claim-account', claimUnifiedAccount);
 
 // Update unified profile
 router.put('/update-profile', updateUnifiedProfile);
+router.post('/update-profile', updateUnifiedProfile); // Also allow POST method
 
 // Change unified PIN
 router.put('/change-pin', changeUnifiedPin);
+
+// Copy profile data between apps
+router.post('/copy-profile', copyProfileData);
+
+// Get profile data
+router.get('/profile-data', getProfileData);
+
+// Check profile completeness
+router.get('/check-profile/:appType', checkProfileCompleteness);
 
 // ============================================================================
 // ADMIN ROUTES FOR UNIFIED USER MANAGEMENT

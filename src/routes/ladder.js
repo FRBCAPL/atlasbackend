@@ -5,12 +5,61 @@ import LadderChallenge from '../models/LadderChallenge.js';
 import LadderMatch from '../models/LadderMatch.js';
 import LadderSignupApplication from '../models/LadderSignupApplication.js';
 import User from '../models/User.js'; // Added import for User
+import UnifiedUser from '../models/UnifiedUser.js'; // Added import for UnifiedUser
 import bcrypt from 'bcryptjs'; // Added import for bcrypt
 import PlayerRecognitionService from '../services/PlayerRecognitionService.js';
 // Note: EmailJS is client-side only, so we'll handle email sending in the frontend
 // For now, we'll just return the credentials and let the frontend handle the email
 
 const router = express.Router();
+
+// Helper function to check unified account status for a ladder player
+const checkUnifiedAccountStatus = async (firstName, lastName) => {
+  try {
+    console.log(`🔍 Checking unified account status for: ${firstName} ${lastName}`);
+    
+    const unifiedUser = await UnifiedUser.findOne({
+      firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+      lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+    });
+    
+    if (unifiedUser) {
+      console.log(`   ✅ Found unified user: ${unifiedUser.firstName} ${unifiedUser.lastName}`);
+      console.log(`   📊 Status: Approved=${unifiedUser.isApproved}, Active=${unifiedUser.isActive}`);
+    } else {
+      console.log(`   ❌ No unified user found`);
+    }
+    
+    if (unifiedUser && unifiedUser.isApproved && unifiedUser.isActive) {
+      console.log(`   🎯 VALID unified account - returning hasUnifiedAccount: true`);
+      return {
+        hasUnifiedAccount: true,
+        isApproved: unifiedUser.isApproved,
+        isActive: unifiedUser.isActive,
+        email: unifiedUser.email,
+        unifiedUserId: unifiedUser._id
+      };
+    }
+    
+    console.log(`   ❌ INVALID or missing unified account - returning hasUnifiedAccount: false`);
+    return {
+      hasUnifiedAccount: false,
+      isApproved: unifiedUser?.isApproved || false,
+      isActive: unifiedUser?.isActive || false,
+      email: unifiedUser?.email || null,
+      unifiedUserId: unifiedUser?._id || null
+    };
+  } catch (error) {
+    console.error('Error checking unified account status:', error);
+    return {
+      hasUnifiedAccount: false,
+      isApproved: false,
+      isActive: false,
+      email: null,
+      unifiedUserId: null
+    };
+  }
+};
 
 // Test route to check if ladder routes are working
 router.get('/test', (req, res) => {
@@ -52,7 +101,19 @@ router.get('/players', async (req, res) => {
     const players = await LadderPlayer.getAllPlayers();
     console.log(`Found ${players.length} total players across all ladders`);
     
-    res.json(players);
+    // Enhance players with unified account status
+    const enhancedPlayers = await Promise.all(players.map(async (player) => {
+      const unifiedStatus = await checkUnifiedAccountStatus(player.firstName, player.lastName);
+      
+      return {
+        ...player.toObject(),
+        unifiedAccount: unifiedStatus
+      };
+    }));
+    
+    console.log(`Enhanced ${enhancedPlayers.length} players with unified account status`);
+    
+    res.json(enhancedPlayers);
   } catch (error) {
     console.error('Error fetching all ladder players:', error);
     res.status(500).json({ error: 'Failed to fetch all ladder players', details: error.message });
@@ -68,7 +129,19 @@ router.get('/ladders/:ladderName/players', async (req, res) => {
     const players = await LadderPlayer.getPlayersByLadder(ladderName);
     console.log(`Found ${players.length} players for ladder ${ladderName}`);
     
-    res.json(players);
+    // Enhance players with unified account status
+    const enhancedPlayers = await Promise.all(players.map(async (player) => {
+      const unifiedStatus = await checkUnifiedAccountStatus(player.firstName, player.lastName);
+      
+      return {
+        ...player.toObject(),
+        unifiedAccount: unifiedStatus
+      };
+    }));
+    
+    console.log(`Enhanced ${enhancedPlayers.length} players with unified account status`);
+    
+    res.json(enhancedPlayers);
   } catch (error) {
     console.error('Error fetching ladder players:', error);
     res.status(500).json({ error: 'Failed to fetch ladder players', details: error.message });
@@ -85,7 +158,15 @@ router.get('/player/:email', async (req, res) => {
       return res.status(404).json({ error: 'Player not found' });
     }
     
-    res.json(player);
+    // Enhance player with unified account status
+    const unifiedStatus = await checkUnifiedAccountStatus(player.firstName, player.lastName);
+    
+    const enhancedPlayer = {
+      ...player.toObject(),
+      unifiedAccount: unifiedStatus
+    };
+    
+    res.json(enhancedPlayer);
   } catch (error) {
     console.error('Error fetching player:', error);
     res.status(500).json({ error: 'Failed to fetch player' });
@@ -125,10 +206,18 @@ router.put('/player/:id', async (req, res) => {
     
     console.log('Successfully updated ladder player:', updatedPlayer.firstName, updatedPlayer.lastName);
     
+    // Enhance updated player with unified account status
+    const unifiedStatus = await checkUnifiedAccountStatus(updatedPlayer.firstName, updatedPlayer.lastName);
+    
+    const enhancedPlayer = {
+      ...updatedPlayer.toObject(),
+      unifiedAccount: unifiedStatus
+    };
+    
     res.json({
       success: true,
       message: 'Ladder player updated successfully',
-      player: updatedPlayer
+      player: enhancedPlayer
     });
     
   } catch (error) {

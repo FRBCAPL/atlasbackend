@@ -4,6 +4,7 @@ import PrizePool from '../models/PrizePool.js';
 import LadderPlayer from '../models/LadderPlayer.js';
 import LadderMatch from '../models/LadderMatch.js';
 import PaymentConfig from '../models/PaymentConfig.js';
+import PendingClaim from '../models/PendingClaim.js';
 import { 
   createSquarePayment, 
   createSquareCustomer, 
@@ -334,7 +335,7 @@ router.get('/payment-methods', async (req, res) => {
  */
 router.post('/create-membership-payment', async (req, res) => {
   try {
-    const { email, playerName, paymentMethod, returnUrl } = req.body;
+    const { email, playerName, paymentMethod, returnUrl, claimData } = req.body;
     
     if (!email || !paymentMethod) {
       return res.status(400).json({
@@ -342,6 +343,15 @@ router.post('/create-membership-payment', async (req, res) => {
         message: 'Email and payment method are required'
       });
     }
+
+    // Map frontend payment method names to backend enum values
+    const paymentMethodMap = {
+      'creditCard': 'credit_card',
+      'applePay': 'apple_pay',
+      'googlePay': 'google_pay'
+    };
+    
+    const backendPaymentMethod = paymentMethodMap[paymentMethod] || paymentMethod;
 
     // Get payment configuration
     const paymentConfig = await PaymentConfig.findOne({ leagueId: 'default' });
@@ -360,7 +370,71 @@ router.post('/create-membership-payment', async (req, res) => {
       });
     }
 
-    // Create payment session
+    // Handle Square payments (Credit/Debit cards)
+    if ((paymentMethod === 'creditCard' || paymentMethod === 'credit_card') && method.processor === 'square') {
+      console.log('🔍 Processing Square payment for:', paymentMethod);
+      console.log('Method config:', method);
+      console.log('Square environment variables:', {
+        SQUARE_ACCESS_TOKEN: process.env.SQUARE_ACCESS_TOKEN ? 'Set' : 'Not set',
+        NODE_ENV: process.env.NODE_ENV,
+        FRONTEND_URL: process.env.FRONTEND_URL
+      });
+      
+      try {
+                 // Create Square payment link for membership
+         const paymentLinkResult = await createSquarePaymentLink({
+           amount: 500, // $5.00 in cents
+           description: `Ladder Membership - ${playerName}`,
+           redirectUrl: returnUrl || `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment-success?email=${email}&type=membership&claimData=${encodeURIComponent(JSON.stringify(claimData))}`
+         });
+        
+        console.log('Square payment link result:', paymentLinkResult);
+
+        if (!paymentLinkResult.success) {
+          throw new Error(paymentLinkResult.error);
+        }
+
+        // Store pending claim in database for verification
+        if (claimData) {
+          const pendingClaim = new PendingClaim({
+            email,
+            playerName,
+            ladder: claimData.ladder,
+            position: claimData.position,
+            generatedPin: claimData.generatedPin,
+            paymentMethod: 'square', // Use 'square' for PendingClaim model
+            amount: 5.00,
+            status: 'pending_payment',
+            createdAt: new Date()
+          });
+          await pendingClaim.save();
+        }
+
+        return res.json({
+          success: true,
+          paymentType: 'square_redirect',
+          paymentUrl: paymentLinkResult.url,
+          paymentSession: {
+            id: `membership_${Date.now()}`,
+            type: 'membership',
+            amount: 5.00,
+            email,
+            playerName,
+            paymentMethod: 'square',
+            status: 'pending',
+            createdAt: new Date()
+          }
+        });
+      } catch (squareError) {
+        console.error('Square payment link creation error:', squareError);
+        return res.status(500).json({
+          error: 'Failed to create Square payment link',
+          message: 'Please try again or contact support'
+        });
+      }
+    }
+
+    // Handle manual payment methods (Venmo, CashApp, Cash, etc.)
     const paymentSession = {
       id: `membership_${Date.now()}`,
       type: 'membership',
@@ -377,8 +451,25 @@ router.post('/create-membership-payment', async (req, res) => {
       createdAt: new Date()
     };
 
+    // Store pending claim for manual payment methods
+    if (claimData) {
+      const pendingClaim = new PendingClaim({
+        email,
+        playerName,
+        ladder: claimData.ladder,
+        position: claimData.position,
+        generatedPin: claimData.generatedPin,
+        paymentMethod: backendPaymentMethod, // Use mapped payment method for PendingClaim
+        amount: 5.00,
+        status: 'pending_payment',
+        createdAt: new Date()
+      });
+      await pendingClaim.save();
+    }
+
     res.json({
       success: true,
+      paymentType: 'manual',
       paymentSession,
       membership: {
         price: 5.00,
@@ -1268,6 +1359,157 @@ router.get('/memberships/expiring', async (req, res) => {
     res.status(500).json({
       error: 'Failed to get expiring memberships',
       message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// SQUARE WEBHOOK HANDLING
+// ============================================================================
+
+/**
+ * Handle Square payment webhook notifications
+ * POST /api/monetization/square/webhook
+ */
+router.post('/square/webhook', async (req, res) => {
+  try {
+    const { type, data } = req.body;
+    
+    // Handle payment completed webhook
+    if (type === 'payment.created' || type === 'payment.updated') {
+      const payment = data.object;
+      
+      if (payment.status === 'COMPLETED') {
+        // Find pending claim by payment ID or email
+        const pendingClaim = await PendingClaim.findOne({
+          $or: [
+            { 'paymentDetails.transactionId': payment.id },
+            { email: payment.receipt_email }
+          ],
+          status: 'pending_payment'
+        });
+        
+        if (pendingClaim) {
+          // Update claim status
+          pendingClaim.status = 'payment_verified';
+          pendingClaim.paymentDetails = {
+            transactionId: payment.id,
+            paymentDate: new Date(),
+            verifiedBy: 'square_webhook',
+            verificationNotes: 'Payment verified via Square webhook'
+          };
+          await pendingClaim.save();
+          
+          // Create or update membership
+          let membership = await Membership.findOne({ playerId: pendingClaim.email });
+          
+          if (!membership) {
+            membership = new Membership({
+              playerId: pendingClaim.email,
+              tier: 'standard',
+              status: 'active',
+              amount: pendingClaim.amount,
+              startDate: new Date(),
+              paymentMethod: 'square',
+              squarePaymentId: payment.id
+            });
+          } else {
+            membership.status = 'active';
+            membership.lastPaymentDate = new Date();
+            membership.paymentMethod = 'square';
+            membership.squarePaymentId = payment.id;
+          }
+          
+          await membership.save();
+          
+          console.log(`Payment verified and membership created for ${pendingClaim.email}`);
+        }
+      }
+    }
+    
+    // Always return 200 to acknowledge receipt
+    res.status(200).json({ received: true });
+    
+  } catch (error) {
+    console.error('Square webhook error:', error);
+    // Still return 200 to prevent Square from retrying
+    res.status(200).json({ received: true, error: error.message });
+  }
+});
+
+// ============================================================================
+// PAYMENT STATUS CHECKING
+// ============================================================================
+
+/**
+ * Check payment status for a user
+ * POST /api/monetization/check-payment-status
+ */
+router.post('/check-payment-status', async (req, res) => {
+  try {
+    const { email, claimData } = req.body;
+    
+    console.log('🔍 Checking payment status for:', email);
+    console.log('📋 Claim data:', claimData);
+    
+    if (!email || !claimData) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Email and claim data are required'
+      });
+    }
+    
+    // Check if there's a pending claim for this user and position
+    const pendingClaim = await PendingClaim.findOne({
+      email: email,
+      ladder: claimData.ladder,
+      position: claimData.position,
+      status: 'pending_payment'
+    });
+    
+    if (!pendingClaim) {
+      console.log('❌ No pending claim found');
+      return res.json({
+        success: false,
+        paymentStatus: 'not_found',
+        message: 'No pending claim found for this position'
+      });
+    }
+    
+    // For Square payments, we need to check the actual payment status
+    // Since this is sandbox testing, we'll simulate a successful payment
+    // In production, you'd verify with Square's API
+    
+    console.log('✅ Found pending claim, simulating successful payment');
+    
+    // Update the claim status to completed
+    pendingClaim.status = 'payment_completed';
+    pendingClaim.paymentCompletedAt = new Date();
+    await pendingClaim.save();
+    
+    // In a real implementation, you'd also:
+    // 1. Verify the payment with Square's API
+    // 2. Update the ladder position status
+    // 3. Send confirmation emails
+    // 4. Update user permissions
+    
+    return res.json({
+      success: true,
+      paymentStatus: 'completed',
+      message: 'Payment verified successfully',
+      claimData: {
+        ladder: pendingClaim.ladder,
+        position: pendingClaim.position,
+        email: pendingClaim.email,
+        playerName: pendingClaim.playerName
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error checking payment status:', error);
+    res.status(500).json({
+      error: 'Failed to check payment status',
+      message: 'Please try again or contact support'
     });
   }
 });

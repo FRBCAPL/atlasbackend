@@ -19,6 +19,12 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
+// Debug environment variables
+console.log('🔍 Environment check:');
+console.log('SQUARE_LOCATION_ID:', process.env.SQUARE_LOCATION_ID);
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+
 // Import routes
 import apiRoutes from './src/routes/index.js';
 import Division from './src/models/Division.js';

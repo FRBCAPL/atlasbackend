@@ -26,11 +26,28 @@ const checkUnifiedAccountStatus = async (firstName, lastName) => {
     if (unifiedUser) {
       console.log(`   ✅ Found unified user: ${unifiedUser.firstName} ${unifiedUser.lastName}`);
       console.log(`   📊 Status: Approved=${unifiedUser.isApproved}, Active=${unifiedUser.isActive}`);
+      console.log(`   📧 Email: "${unifiedUser.email}" (length: ${unifiedUser.email?.length || 0})`);
+      console.log(`   🎭 Role: ${unifiedUser.role}`);
     } else {
       console.log(`   ❌ No unified user found`);
     }
     
-    if (unifiedUser && unifiedUser.isApproved && unifiedUser.isActive) {
+    // Only consider it a valid unified account if:
+    // 1. User exists
+    // 2. User is approved
+    // 3. User is active
+    // 4. User has a real email (not empty/null)
+    // 5. User has a proper role (not just a placeholder)
+    // 6. Email is NOT a fake/test email
+    const isFakeEmail = /@(ladder\.local|ladder\.temp|test|temp|local|fake|example|dummy)/i.test(unifiedUser.email);
+    
+    if (unifiedUser && 
+        unifiedUser.isApproved && 
+        unifiedUser.isActive && 
+        unifiedUser.email && 
+        unifiedUser.email.trim() !== '' &&
+        unifiedUser.role === 'player' &&
+        !isFakeEmail) {
       console.log(`   🎯 VALID unified account - returning hasUnifiedAccount: true`);
       return {
         hasUnifiedAccount: true,
@@ -41,7 +58,23 @@ const checkUnifiedAccountStatus = async (firstName, lastName) => {
       };
     }
     
-    console.log(`   ❌ INVALID or missing unified account - returning hasUnifiedAccount: false`);
+    // Log why the account is considered invalid
+    if (unifiedUser) {
+      const reasons = [];
+      if (!unifiedUser.isApproved) reasons.push('not approved');
+      if (!unifiedUser.isActive) reasons.push('not active');
+      if (!unifiedUser.email || unifiedUser.email.trim() === '') reasons.push('no email');
+      if (unifiedUser.role !== 'player') reasons.push('wrong role');
+      
+      // Check for fake emails
+      const isFakeEmail = /@(ladder\.local|ladder\.temp|test|temp|local|fake|example|dummy)/i.test(unifiedUser.email);
+      if (isFakeEmail) reasons.push('fake email');
+      
+      console.log(`   ❌ INVALID unified account - reasons: ${reasons.join(', ')}`);
+    } else {
+      console.log(`   ❌ No unified user found`);
+    }
+    
     return {
       hasUnifiedAccount: false,
       isApproved: unifiedUser?.isApproved || false,

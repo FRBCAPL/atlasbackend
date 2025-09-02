@@ -1,6 +1,10 @@
 import { Client, Environment } from 'square';
 
 // Initialize Square client
+console.log('🔧 Initializing Square client...');
+console.log('Square Access Token:', process.env.SQUARE_ACCESS_TOKEN ? 'Set' : 'Not set');
+console.log('Environment:', process.env.NODE_ENV === 'production' ? 'Production' : 'Sandbox');
+
 const client = new Client({
   accessToken: process.env.SQUARE_ACCESS_TOKEN,
   environment: process.env.NODE_ENV === 'production' ? Environment.Production : Environment.Sandbox,
@@ -159,25 +163,40 @@ export const createSquarePaymentLink = async (linkData) => {
         priceMoney: {
           amount: amount,
           currency: 'USD'
-        }
+        },
+        locationId: process.env.SQUARE_LOCATION_ID
       },
       redirectUrl: redirectUrl || `${process.env.FRONTEND_URL}/payment-success`
     };
 
+    console.log('🔍 Creating Square payment link with:', {
+      amount,
+      description,
+      redirectUrl,
+      locationId: process.env.SQUARE_LOCATION_ID
+    });
+
     const response = await client.checkoutApi.createPaymentLink(requestBody);
     
-    return {
-      success: true,
-      paymentLink: response.result.paymentLink,
-      url: response.result.paymentLink.url
-    };
+    console.log('✅ Square payment link response:', response);
+
+    if (response.result && response.result.paymentLink) {
+      return {
+        success: true,
+        url: response.result.paymentLink.url,
+        paymentLink: response.result.paymentLink.url,
+        id: response.result.paymentLink.id
+      };
+    } else {
+      throw new Error('Invalid response from Square API');
+    }
 
   } catch (error) {
-    console.error('Square payment link error:', error);
+    console.error('❌ Square payment link creation error:', error);
     return {
       success: false,
       error: error.message,
-      details: error.result?.errors || []
+      details: error
     };
   }
 };

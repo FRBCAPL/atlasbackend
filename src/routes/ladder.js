@@ -92,6 +92,51 @@ router.get('/player/:email', async (req, res) => {
   }
 });
 
+// Update ladder player by ID
+router.put('/player/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    
+    console.log('Updating ladder player:', id, 'with data:', updateData);
+    
+    // Find the player by ID
+    const player = await LadderPlayer.findById(id);
+    if (!player) {
+      return res.status(404).json({ error: 'Ladder player not found' });
+    }
+    
+    // Only allow updating specific fields for security
+    const allowedUpdates = ['email', 'firstName', 'lastName', 'fargoRate', 'isActive'];
+    const filteredUpdates = {};
+    
+    Object.keys(updateData).forEach(key => {
+      if (allowedUpdates.includes(key)) {
+        filteredUpdates[key] = updateData[key];
+      }
+    });
+    
+    // Update the player
+    const updatedPlayer = await LadderPlayer.findByIdAndUpdate(
+      id,
+      filteredUpdates,
+      { new: true, runValidators: true }
+    );
+    
+    console.log('Successfully updated ladder player:', updatedPlayer.firstName, updatedPlayer.lastName);
+    
+    res.json({
+      success: true,
+      message: 'Ladder player updated successfully',
+      player: updatedPlayer
+    });
+    
+  } catch (error) {
+    console.error('Error updating ladder player:', error);
+    res.status(500).json({ error: 'Failed to update ladder player', details: error.message });
+  }
+});
+
 // Signup for ladder (new application)
 router.post('/signup', async (req, res) => {
   try {

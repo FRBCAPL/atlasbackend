@@ -226,12 +226,12 @@ export const claimUnifiedAccount = async (req, res) => {
     // Check if user already exists in unified system (only if email provided)
     if (email) {
       const existingUnifiedUser = await UnifiedUser.findOne({ 
-        email: { $regex: new RegExp(`^${email}$`, 'i') }
-      });
+      email: { $regex: new RegExp(`^${email}$`, 'i') }
+    });
 
       if (existingUnifiedUser) {
-        return res.status(400).json({
-          success: false,
+      return res.status(400).json({
+        success: false,
           message: 'User already exists with this email in the unified system'
         });
       }
@@ -355,23 +355,23 @@ export const claimUnifiedAccount = async (req, res) => {
       }
 
       // Create unified account for existing player
-      const newUnifiedUser = new UnifiedUser({
-        firstName: firstName,
-        lastName: lastName,
+    const newUnifiedUser = new UnifiedUser({
+      firstName: firstName,
+      lastName: lastName,
         email: finalEmail.toLowerCase(),
-        pin: `${firstName}${lastName}`, // Default PIN
+      pin: `${firstName}${lastName}`, // Default PIN
         phone: phone || leaguePlayer?.phone || '',
-        isActive: true,
+      isActive: true,
         isApproved: true, // Auto-approve existing players
-        role: 'player',
-        registrationDate: new Date(),
-        preferences: {
-          googleCalendarIntegration: false,
-          emailNotifications: true
-        }
-      });
+      role: 'player',
+      registrationDate: new Date(),
+      preferences: {
+        googleCalendarIntegration: false,
+        emailNotifications: true
+      }
+    });
 
-      await newUnifiedUser.save();
+    await newUnifiedUser.save();
       console.log('✅ Created unified account for existing player:', `${firstName} ${lastName}`);
 
       response.scenario = 'existing_player_auto_approved';

@@ -1104,13 +1104,22 @@ router.get('/player-status/:email', async (req, res) => {
       });
     }
     
+    // Check unified account status
+    let unifiedAccount = null;
+    if (ladderPlayer) {
+      unifiedAccount = await checkUnifiedAccountStatus(ladderPlayer.firstName, ladderPlayer.lastName);
+    } else if (leaguePlayer) {
+      unifiedAccount = await checkUnifiedAccountStatus(leaguePlayer.firstName, leaguePlayer.lastName);
+    }
+    
     const response = {
       isLeaguePlayer: !!leaguePlayer,
       isLadderPlayer: !!ladderPlayer,
       needsAccountClaim: !ladderPlayer && leaguePlayer, // League player but no ladder account
       playerInfo: null,
       leagueInfo: null,
-      ladderInfo: null
+      ladderInfo: null,
+      unifiedAccount: unifiedAccount
     };
 
     if (leaguePlayer) {

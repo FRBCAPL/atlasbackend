@@ -1,6 +1,7 @@
 import UnifiedUser from '../models/UnifiedUser.js';
 import LeagueProfile from '../models/LeagueProfile.js';
 import LadderPlayer from '../models/LadderPlayer.js';
+import User from '../models/User.js';
 import SimpleProfile from '../models/SimpleProfile.js';
 import Location from '../models/Location.js';
 import bcrypt from 'bcryptjs';
@@ -211,75 +212,248 @@ export const getUnifiedUserStatus = async (req, res) => {
 
 export const claimUnifiedAccount = async (req, res) => {
   try {
-    const { email, firstName, lastName } = req.body;
+    const { email, firstName, lastName, pin, phone } = req.body;
 
-    console.log('🔍 Claiming unified account for:', `${firstName} ${lastName} (${email})`);
+    console.log('🔍 Consolidated claiming attempt for:', `${firstName} ${lastName} (${email || 'no email'})`);
 
-    if (!email || !firstName || !lastName) {
+    if (!firstName || !lastName) {
       return res.status(400).json({
         success: false,
-        message: 'Email, firstName, and lastName are required'
+        message: 'First name and last name are required'
       });
     }
 
-    // Check if user already exists
-    const existingUser = await UnifiedUser.findOne({ 
-      email: { $regex: new RegExp(`^${email}$`, 'i') }
-    });
-
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'User already exists with this email'
+    // Check if user already exists in unified system (only if email provided)
+    if (email) {
+      const existingUnifiedUser = await UnifiedUser.findOne({ 
+        email: { $regex: new RegExp(`^${email}$`, 'i') }
       });
-    }
 
-    // Look for existing profiles by name
-    const leagueProfile = await LeagueProfile.findOne({
-      $or: [
-        { 'user.firstName': { $regex: new RegExp(`^${firstName}$`, 'i') } },
-        { 'user.lastName': { $regex: new RegExp(`^${lastName}$`, 'i') } }
-      ]
-    }).populate('userId');
-
-    const ladderProfile = await LadderProfile.findOne({
-      $or: [
-        { 'user.firstName': { $regex: new RegExp(`^${firstName}$`, 'i') } },
-        { 'user.lastName': { $regex: new RegExp(`^${lastName}$`, 'i') } }
-      ]
-    }).populate('userId');
-
-    // Create new unified user
-    const newUnifiedUser = new UnifiedUser({
-      firstName: firstName,
-      lastName: lastName,
-      email: email.toLowerCase(),
-      pin: `${firstName}${lastName}`, // Default PIN
-      isActive: true,
-      isApproved: true,
-      role: 'player',
-      registrationDate: new Date(),
-      preferences: {
-        googleCalendarIntegration: false,
-        emailNotifications: true
+      if (existingUnifiedUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'User already exists with this email in the unified system'
+        });
       }
-    });
+    }
 
-    await newUnifiedUser.save();
+    // Search for existing profiles across all systems
+    let leaguePlayer = null;
+    let ladderPlayer = null;
+    let foundEmail = null;
 
-    console.log('✅ Created new unified user:', `${newUnifiedUser.firstName} ${newUnifiedUser.lastName}`);
+    // Search by email if provided
+    if (email) {
+      foundEmail = email.toLowerCase();
+      
+      // Check league system
+      leaguePlayer = await User.findOne({ email: foundEmail });
+      
+      // Check ladder system
+      ladderPlayer = await LadderPlayer.findOne({ email: foundEmail });
+    }
 
-    res.json({
+    // Search by PIN if email not found or not provided
+    if (!leaguePlayer && !ladderPlayer && pin) {
+      console.log('🔍 Searching by PIN...');
+      
+      // Search league players by PIN
+      const allLeaguePlayers = await User.find({});
+      for (const player of allLeaguePlayers) {
+        const isPinValid = await player.comparePin(pin);
+        if (isPinValid) {
+          leaguePlayer = player;
+          foundEmail = player.email;
+          console.log('✅ Found league player by PIN:', player.firstName, player.lastName);
+          break;
+        }
+      }
+
+      // Search ladder players by PIN
+      if (!ladderPlayer) {
+        const allLadderPlayers = await LadderPlayer.find({});
+        for (const player of allLadderPlayers) {
+          const isPinValid = await player.comparePin(pin);
+          if (isPinValid) {
+            ladderPlayer = player;
+            foundEmail = player.email;
+            console.log('✅ Found ladder player by PIN:', player.firstName, player.lastName);
+            break;
+          }
+        }
+      }
+    }
+
+    // Search by name if no players found yet
+    if (!leaguePlayer && !ladderPlayer) {
+      console.log('🔍 Searching by name...');
+      
+      // Check league system by name
+      leaguePlayer = await User.findOne({
+        firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+        lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+      });
+
+      // Check ladder system by name
+      ladderPlayer = await LadderPlayer.findOne({
+        firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+        lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+      });
+
+      if (leaguePlayer) {
+        foundEmail = leaguePlayer.email;
+        console.log('✅ Found league player by name:', leaguePlayer.firstName, leaguePlayer.lastName);
+      }
+      if (ladderPlayer) {
+        foundEmail = ladderPlayer.email || foundEmail;
+        console.log('✅ Found ladder player by name:', ladderPlayer.firstName, ladderPlayer.lastName);
+      }
+    }
+
+    // Verify name matches for any found players
+    const verifyNameMatch = (player) => {
+      if (!player) return false;
+      const playerFirstName = player.firstName?.toLowerCase().trim();
+      const playerLastName = player.lastName?.toLowerCase().trim();
+      const inputFirstName = firstName.toLowerCase().trim();
+      const inputLastName = lastName.toLowerCase().trim();
+      
+      return playerFirstName === inputFirstName && playerLastName === inputLastName;
+    };
+
+    // Validate name matches
+    if (leaguePlayer && !verifyNameMatch(leaguePlayer)) {
+      console.log('❌ League player name mismatch');
+      leaguePlayer = null;
+    }
+    
+    if (ladderPlayer && !verifyNameMatch(ladderPlayer)) {
+      console.log('❌ Ladder player name mismatch');
+      ladderPlayer = null;
+    }
+
+    // Determine the claiming scenario and handle accordingly
+    let response = {
       success: true,
-      message: 'Account claimed successfully',
-      user: {
+      scenario: 'unknown',
+      message: '',
+      requiresApproval: false,
+      user: null,
+      accessGranted: false
+    };
+
+    if (leaguePlayer || ladderPlayer) {
+      // SCENARIO 1: Existing player found - Auto-approve and create unified account
+      console.log('🎯 SCENARIO 1: Existing player found - Auto-approving');
+      
+      const finalEmail = foundEmail || email;
+      if (!finalEmail) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email address is required for existing players'
+        });
+      }
+
+      // Create unified account for existing player
+      const newUnifiedUser = new UnifiedUser({
+        firstName: firstName,
+        lastName: lastName,
+        email: finalEmail.toLowerCase(),
+        pin: `${firstName}${lastName}`, // Default PIN
+        phone: phone || leaguePlayer?.phone || '',
+        isActive: true,
+        isApproved: true, // Auto-approve existing players
+        role: 'player',
+        registrationDate: new Date(),
+        preferences: {
+          googleCalendarIntegration: false,
+          emailNotifications: true
+        }
+      });
+
+      await newUnifiedUser.save();
+      console.log('✅ Created unified account for existing player:', `${firstName} ${lastName}`);
+
+      response.scenario = 'existing_player_auto_approved';
+      response.message = 'Existing player account automatically approved and unified!';
+      response.accessGranted = true;
+      response.user = {
         _id: newUnifiedUser._id,
         firstName: newUnifiedUser.firstName,
         lastName: newUnifiedUser.lastName,
         email: newUnifiedUser.email,
         pin: newUnifiedUser.pin
+      };
+
+      // Add profile information
+      if (leaguePlayer) {
+        response.leagueInfo = {
+          firstName: leaguePlayer.firstName,
+          lastName: leaguePlayer.lastName,
+          email: leaguePlayer.email,
+          phone: leaguePlayer.phone,
+          divisions: leaguePlayer.divisions || []
+        };
       }
-    });
+
+      if (ladderPlayer) {
+        response.ladderInfo = {
+          firstName: ladderPlayer.firstName,
+          lastName: ladderPlayer.lastName,
+          position: ladderPlayer.position,
+          fargoRate: ladderPlayer.fargoRate,
+          ladderName: ladderPlayer.ladderName,
+          isActive: ladderPlayer.isActive
+        };
+      }
+
+    } else if (email) {
+      // SCENARIO 2: New user with email - Create pending account requiring admin approval
+      console.log('🎯 SCENARIO 2: New user with email - Requires admin approval');
+      
+      const newUnifiedUser = new UnifiedUser({
+        firstName: firstName,
+        lastName: lastName,
+        email: email.toLowerCase(),
+        pin: `${firstName}${lastName}`, // Default PIN
+        phone: phone || '',
+        isActive: false,
+        isApproved: false,
+        isPendingApproval: true,
+        role: 'player',
+        registrationDate: new Date(),
+        preferences: {
+          googleCalendarIntegration: false,
+          emailNotifications: true
+        }
+      });
+
+      await newUnifiedUser.save();
+      console.log('✅ Created pending unified account for new user:', `${firstName} ${lastName}`);
+
+      response.scenario = 'new_user_pending_approval';
+      response.message = 'Account created successfully! Please wait for admin approval.';
+      response.requiresApproval = true;
+      response.accessGranted = false;
+      response.user = {
+        _id: newUnifiedUser._id,
+        firstName: newUnifiedUser.firstName,
+        lastName: newUnifiedUser.lastName,
+        email: newUnifiedUser.email
+      };
+
+    } else {
+      // SCENARIO 3: No email provided and no existing player found
+      console.log('🎯 SCENARIO 3: No email and no existing player - Cannot proceed');
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Email address is required for new users. Please provide your email address.'
+      });
+    }
+
+    console.log('✅ Claiming process completed successfully');
+    res.json(response);
 
   } catch (error) {
     console.error('❌ Claim unified account error:', error);

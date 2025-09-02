@@ -800,7 +800,9 @@ router.post('/recognize-player', async (req, res) => {
   }
 });
 
-// Unified access endpoint - requires name AND email OR PIN
+// DEPRECATED: This endpoint has been consolidated into the unified auth system
+// Use /api/unified-auth/claim-account instead for all account claiming functionality
+// This endpoint is kept for backward compatibility but will be removed in future versions
 router.post('/claim-account', async (req, res) => {
   try {
     const { firstName, lastName, email, pin } = req.body;

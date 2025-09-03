@@ -262,24 +262,56 @@ router.put('/player/:id', async (req, res) => {
 // Signup for ladder (new application)
 router.post('/signup', async (req, res) => {
   try {
+    console.log('📝 Signup request received:', req.body);
+    
     const { firstName, lastName, email, phone, fargoRate, experience, currentLeague, currentRanking } = req.body;
     
     // Validate required fields
     if (!firstName || !lastName || !email) {
+      console.log('❌ Missing required fields');
       return res.status(400).json({ error: 'First name, last name, and email are required' });
     }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      console.log('❌ Invalid email format:', email);
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+    
+    // Validate fargoRate if provided
+    if (fargoRate !== undefined && fargoRate !== null) {
+      if (typeof fargoRate !== 'number' || fargoRate < 0 || fargoRate > 850) {
+        console.log('❌ Invalid fargoRate:', fargoRate);
+        return res.status(400).json({ error: 'FargoRate must be a number between 0 and 850' });
+      }
+    }
+    
+    console.log('✅ Validation passed, checking for existing players...');
     
     // Check if player already exists
     const existingPlayer = await LadderPlayer.findOne({ email });
     if (existingPlayer) {
+      console.log('❌ Player already exists with email:', email);
       return res.status(400).json({ error: 'A player with this email already exists' });
     }
+    
+    console.log('✅ No existing player found, checking for existing applications...');
+    
+    // Check if signup application already exists
+    const existingApplication = await LadderSignupApplication.findOne({ email });
+    if (existingApplication) {
+      console.log('❌ Application already exists with email:', email);
+      return res.status(400).json({ error: 'A signup application with this email already exists' });
+    }
+    
+    console.log('✅ No existing application found, creating new application...');
     
     // Create a new ladder signup application
     const signupApplication = new LadderSignupApplication({
       firstName,
       lastName,
-      email,
+      email: email.toLowerCase().trim(),
       phone: phone || '',
       fargoRate: fargoRate || null,
       experience: experience || 'beginner',
@@ -289,7 +321,11 @@ router.post('/signup', async (req, res) => {
       submittedAt: new Date()
     });
     
+    console.log('📝 Signup application object created:', signupApplication);
+    
     await signupApplication.save();
+    
+    console.log('✅ Signup application saved successfully');
     
     // Send notification email (you can implement this later)
     // await sendSignupNotification(signupApplication);
@@ -300,7 +336,11 @@ router.post('/signup', async (req, res) => {
     });
   } catch (error) {
     console.error('Error submitting signup application:', error);
-    res.status(500).json({ error: 'Failed to submit signup application' });
+    res.status(500).json({ 
+      error: 'Failed to submit signup application', 
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 

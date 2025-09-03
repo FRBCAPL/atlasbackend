@@ -30,6 +30,17 @@ import apiRoutes from './src/routes/index.js';
 import Division from './src/models/Division.js';
 import unifiedAuthRoutes from './src/routes/unifiedAuth.js';
 
+// Import models to ensure they are registered with Mongoose
+import './src/models/LadderSignupApplication.js';
+import './src/models/LadderPlayer.js';
+import './src/models/Ladder.js';
+import './src/models/LadderChallenge.js';
+import './src/models/LadderMatch.js';
+import './src/models/Membership.js';
+import './src/models/PrizePool.js';
+import './src/models/PaymentConfig.js';
+import './src/models/UnifiedUser.js';
+
 // Import security middleware
 import { 
   rateLimiter, 

@@ -70,7 +70,7 @@ router.post('/square/create-membership-payment', async (req, res) => {
     const paymentResult = await createSquarePayment({
       amount: amount,
       sourceId: sourceId,
-      idempotencyKey: `membership_${Date.now()}_${email}`,
+      idempotencyKey: `mem_${Date.now().toString().slice(-8)}`,
       customerId: squareCustomerId,
       note: `Ladder Membership - ${playerName}`
     });

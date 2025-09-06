@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fargo Rating Admin</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .section h2 {
+            color: #555;
+            margin-top: 0;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        select, input, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .ratings-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        .ratings-table th,
+        .ratings-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .ratings-table th {
+            background-color: #f8f9fa;
+        }
+        .ratings-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+        }
+        .file-upload {
+            border: 2px dashed #ddd;
+            padding: 20px;
+            text-align: center;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .file-upload.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        .history-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .history-item:last-child {
+            border-bottom: none;
+        }
+        .timestamp {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .level-info { color: #007bff; }
+        .level-warn { color: #ffc107; }
+        .level-error { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏓 Fargo Rating Administration</h1>
+        
+        <!-- Current Ratings Section -->
+        <div class="section">
+            <h2>Current Ratings</h2>
+            <div class="form-group">
+                <label for="ladderSelect">Select Ladder:</label>
+                <select id="ladderSelect">
+                    <option value="499-under">499 & Under</option>
+                    <option value="500-549">500-549</option>
+                    <option value="550-plus">550+</option>
+                </select>
+            </div>
+            <button onclick="loadCurrentRatings()">Load Current Ratings</button>
+            <button onclick="createBackup()">Create Backup</button>
+            <div id="currentRatings"></div>
+        </div>
+
+        <!-- Manual Update Section -->
+        <div class="section">
+            <h2>Manual Rating Update</h2>
+            <div class="form-group">
+                <label for="manualLadderSelect">Select Ladder:</label>
+                <select id="manualLadderSelect">
+                    <option value="499-under">499 & Under</option>
+                    <option value="500-549">500-549</option>
+                    <option value="550-plus">550+</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="ratingsInput">Enter Ratings (one per line, use 0 for no rating):</label>
+                <textarea id="ratingsInput" rows="10" placeholder="471&#10;463&#10;455&#10;470&#10;488&#10;..."></textarea>
+            </div>
+            <button onclick="updateRatingsManually()">Update Ratings</button>
+            <div id="manualUpdateResult"></div>
+        </div>
+
+        <!-- File Upload Section -->
+        <div class="section">
+            <h2>Upload Ratings from File</h2>
+            <div class="form-group">
+                <label for="uploadLadderSelect">Select Ladder:</label>
+                <select id="uploadLadderSelect">
+                    <option value="499-under">499 & Under</option>
+                    <option value="500-549">500-549</option>
+                    <option value="550-plus">550+</option>
+                </select>
+            </div>
+            <div class="file-upload" id="fileUpload">
+                <p>Drag and drop a CSV or text file here, or click to select</p>
+                <input type="file" id="fileInput" accept=".csv,.txt" style="display: none;">
+                <button onclick="document.getElementById('fileInput').click()">Choose File</button>
+            </div>
+            <div id="uploadResult"></div>
+        </div>
+
+        <!-- Update History Section -->
+        <div class="section">
+            <h2>Update History</h2>
+            <button onclick="loadUpdateHistory()">Load History</button>
+            <div id="updateHistory"></div>
+        </div>
+
+        <!-- Automated Scraper Section -->
+        <div class="section">
+            <h2>🤖 Automated Fargo Scraper</h2>
+            <div class="form-group">
+                <label for="scraperLadderSelect">Select Ladder:</label>
+                <select id="scraperLadderSelect">
+                    <option value="499-under">499 & Under</option>
+                    <option value="500-549">500-549</option>
+                    <option value="550-plus">550+</option>
+                </select>
+            </div>
+            <button onclick="testScraper()">Test Scraper</button>
+            <button onclick="runScraperUpdate()">Run Full Update</button>
+            <button onclick="getScraperStatus()">Get Scraper Status</button>
+            <div id="scraperResults"></div>
+        </div>
+
+        <!-- Gradual Update Section -->
+        <div class="section">
+            <h2>🔄 Gradual Update System</h2>
+            <p><em>Updates one player every 6 hours automatically. Very respectful to FargoRate servers.</em></p>
+            <div class="form-group">
+                <label for="gradualLadderSelect">Select Ladder:</label>
+                <select id="gradualLadderSelect">
+                    <option value="499-under">499 & Under</option>
+                    <option value="500-549">500-549</option>
+                    <option value="550-plus">550+</option>
+                </select>
+            </div>
+            <button onclick="getPlayerIndex()">Check Progress</button>
+            <button onclick="updateSinglePlayer()">Update Next Player</button>
+            <button onclick="resetPlayerIndex()">Reset Progress</button>
+            <div id="gradualResults"></div>
+        </div>
+
+        <!-- System Status Section -->
+        <div class="section">
+            <h2>System Status</h2>
+            <button onclick="checkSystemHealth()">Check Health</button>
+            <div id="systemStatus"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/fargo-admin';
+        
+        // File upload handling
+        const fileUpload = document.getElementById('fileUpload');
+        const fileInput = document.getElementById('fileInput');
+        
+        fileUpload.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUpload.classList.add('dragover');
+        });
+        
+        fileUpload.addEventListener('dragleave', () => {
+            fileUpload.classList.remove('dragover');
+        });
+        
+        fileUpload.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUpload.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                uploadFile();
+            }
+        });
+        
+        fileInput.addEventListener('change', uploadFile);
+        
+        async function loadCurrentRatings() {
+            const ladderName = document.getElementById('ladderSelect').value;
+            const container = document.getElementById('currentRatings');
+            
+            container.innerHTML = '<div class="loading">Loading current ratings...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/ratings/${ladderName}`);
+                const ratings = await response.json();
+                
+                if (response.ok) {
+                    let html = `<h3>Current Ratings for ${ladderName}</h3>`;
+                    html += '<table class="ratings-table">';
+                    html += '<tr><th>Position</th><th>Player</th><th>Fargo Rate</th></tr>';
+                    
+                    ratings.forEach(rating => {
+                        const rateDisplay = rating.fargoRate > 0 ? rating.fargoRate : 'No Rating';
+                        html += `<tr><td>${rating.position}</td><td>${rating.name}</td><td>${rateDisplay}</td></tr>`;
+                    });
+                    
+                    html += '</table>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `<div class="error">Error: ${ratings.error}</div>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="error">Error loading ratings: ${error.message}</div>`;
+            }
+        }
+        
+        async function updateRatingsManually() {
+            const ladderName = document.getElementById('manualLadderSelect').value;
+            const ratingsText = document.getElementById('ratingsInput').value;
+            const container = document.getElementById('manualUpdateResult');
+            
+            if (!ratingsText.trim()) {
+                container.innerHTML = '<div class="error">Please enter ratings</div>';
+                return;
+            }
+            
+            const ratings = ratingsText.split('\n').map(line => {
+                const rating = parseInt(line.trim());
+                return isNaN(rating) ? null : rating;
+            });
+            
+            container.innerHTML = '<div class="loading">Updating ratings...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/update/${ladderName}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ ratings })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    let html = '<div class="success">Ratings updated successfully!</div>';
+                    html += `<p><strong>Updated:</strong> ${result.results.updated}</p>`;
+                    html += `<p><strong>Unchanged:</strong> ${result.results.unchanged}</p>`;
+                    html += `<p><strong>Errors:</strong> ${result.results.errors.length}</p>`;
+                    
+                    if (result.results.changes.length > 0) {
+                        html += '<h4>Changes Made:</h4><ul>';
+                        result.results.changes.forEach(change => {
+                            html += `<li>${change.player}: ${change.oldRating} → ${change.newRating}</li>`;
+                        });
+                        html += '</ul>';
+                    }
+                    
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `<div class="error">Error: ${result.error}</div>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="error">Error updating ratings: ${error.message}</div>`;
+            }
+        }
+        
+        async function uploadFile() {
+            const file = fileInput.files[0];
+            if (!file) return;
+            
+            const ladderName = document.getElementById('uploadLadderSelect').value;
+            const container = document.getElementById('uploadResult');
+            
+            container.innerHTML = '<div class="loading">Uploading and processing file...</div>';
+            
+            const formData = new FormData();
+            formData.append('ratingsFile', file);
+            
+            try {
+                const response = await fetch(`${API_BASE}/upload/${ladderName}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    let html = '<div class="success">File uploaded and ratings updated successfully!</div>';
+                    html += `<p><strong>Updated:</strong> ${result.results.updated}</p>`;
+                    html += `<p><strong>Unchanged:</strong> ${result.results.unchanged}</p>`;
+                    html += `<p><strong>Errors:</strong> ${result.results.errors.length}</p>`;
+                    
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `<div class="error">Error: ${result.error}</div>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="error">Error uploading file: ${error.message}</div>`;
+            }
+        }
+        
+        async function createBackup() {
+            const ladderName = document.getElementById('ladderSelect').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/backup/${ladderName}`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(`Backup created successfully!\nLocation: ${result.backupPath}`);
+                } else {
+                    alert(`Error creating backup: ${result.error}`);
+                }
+            } catch (error) {
+                alert(`Error creating backup: ${error.message}`);
+            }
+        }
+        
+        async function loadUpdateHistory() {
+            const container = document.getElementById('updateHistory');
+            container.innerHTML = '<div class="loading">Loading update history...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/history?limit=20`);
+                const history = await response.json();
+                
+                if (response.ok) {
+                    let html = '<h3>Recent Updates</h3>';
+                    
+                    if (history.length === 0) {
+                        html += '<p>No update history found.</p>';
+                    } else {
+                        history.forEach(item => {
+                            const levelClass = `level-${item.level.toLowerCase()}`;
+                            html += `<div class="history-item">`;
+                            html += `<span class="timestamp">${item.timestamp}</span> `;
+                            html += `<span class="${levelClass}">[${item.level}]</span> `;
+                            html += `${item.message}`;
+                            html += `</div>`;
+                        });
+                    }
+                    
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `<div class="error">Error: ${history.error}</div>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="error">Error loading history: ${error.message}</div>`;
+            }
+        }
+        
+        async function checkSystemHealth() {
+            const container = document.getElementById('systemStatus');
+            container.innerHTML = '<div class="loading">Checking system health...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const status = await response.json();
+                
+                if (response.ok) {
+                    let html = '<div class="success">System is healthy!</div>';
+                    html += `<p><strong>Status:</strong> ${status.status}</p>`;
+                    html += `<p><strong>Players Count:</strong> ${status.playersCount}</p>`;
+                    html += `<p><strong>Last Check:</strong> ${status.timestamp}</p>`;
+                    
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `<div class="error">System unhealthy: ${status.error}</div>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="error">Error checking health: ${error.message}</div>`;
+            }
+        }
+        
+        async function testScraper() {
+            const container = document.getElementById('scraperResults');
+            const playerName = prompt('Enter a player name to test (e.g., "Brett Gonzalez"):');
+            
+            if (!playerName) return;
+            
+            container.innerHTML = '<div class="loading">Testing scraper...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/test-scraper`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ playerName })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    let html = '<div class="success">Scraper test completed!</div>';
+                    html += `<p><strong>Player:</strong> ${result.playerName}</p>`;
+                    
+                    if (result.result) {
+                        html += `<p><strong>Found:</strong> ${result.result.name}</p>`;
+                        html += `<p><strong>Rating:</strong> ${result.result.rating}</p>`;
+                        html += `<p><strong>Source:</strong> ${result.result.source}</p>`;
+                    } else {
+                        html += '<p><strong>Result:</strong> Player not found</p>';
+                    }
+                    
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `<div class="error">Error: ${result.error}</div>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="error">Error testing scraper: ${error.message}</div>`;
+            }
+        }
+        
+        async function runScraperUpdate() {
+            const ladderName = document.getElementById('scraperLadderSelect').value;
+            const container = document.getElementById('scraperResults');
+            
+            const confirm = confirm(`This will run the automated scraper for ${ladderName} ladder. This may take several minutes. Continue?`);
+            if (!confirm) return;
+            
+            container.innerHTML = '<div class="loading">Running automated scraper update... This may take several minutes.</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/scrape-update/${ladderName}`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    let html = '<div class="success">Automated scraper update completed!</div>';
+                    html += `<p><strong>Updated:</strong> ${result.results.updated}</p>`;
+                    html += `<p><strong>Not Found:</strong> ${result.results.notFound}</p>`;
+                    html += `<p><strong>Errors:</strong> ${result.results.errors}</p>`;
+                    
+                    if (result.results.changes.length > 0) {
+                        html += '<h4>Changes Made:</h4><ul>';
+                        result.results.changes.forEach(change => {
+                            html += `<li>${change.player}: ${change.oldRating} → ${change.newRating}</li>`;
+                        });
+                        html += '</ul>';
+                    }
+                    
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `<div class="error">Error: ${result.error}</div>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="error">Error running scraper: ${error.message}</div>`;
+            }
+        }
+        
+        async function getScraperStatus() {
+            const container = document.getElementById('scraperResults');
+            container.innerHTML = '<div class="loading">Getting scraper status...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/scraper-status`);
+                const status = await response.json();
+                
+                if (response.ok) {
+                    let html = '<div class="success">Scraper Status</div>';
+                    html += `<p><strong>Status:</strong> ${status.status}</p>`;
+                    html += `<p><strong>Base URL:</strong> ${status.baseUrl}</p>`;
+                    html += `<p><strong>Search URL:</strong> ${status.searchUrl}</p>`;
+                    html += `<p><strong>Rate Limit:</strong> ${status.rateLimitDelay}ms</p>`;
+                    html += `<p><strong>Last Check:</strong> ${status.timestamp}</p>`;
+                    
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `<div class="error">Error: ${status.error}</div>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="error">Error getting status: ${error.message}</div>`;
+            }
+        }
+
+        async function getPlayerIndex() {
+            const ladderName = document.getElementById('gradualLadderSelect').value;
+            const container = document.getElementById('gradualResults');
+            
+            container.innerHTML = '<div class="loading">Getting player index...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/player-index/${ladderName}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    let html = '<div class="success">Player Index Status</div>';
+                    html += `<p><strong>Progress:</strong> ${data.progress}</p>`;
+                    html += `<p><strong>Current Index:</strong> ${data.currentIndex}</p>`;
+                    html += `<p><strong>Total Players:</strong> ${data.totalPlayers}</p>`;
+                    
+                    if (data.nextPlayer) {
+                        html += `<p><strong>Next Player:</strong> ${data.nextPlayer.name} (Rating: ${data.nextPlayer.fargoRate || 'No Rating'})</p>`;
+                    }
+                    
+                    const percentage = Math.round((data.currentIndex / data.totalPlayers) * 100);
+                    html += `<p><strong>Completion:</strong> ${percentage}%</p>`;
+                    
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `<div class="error">Error: ${data.error}</div>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="error">Error getting player index: ${error.message}</div>`;
+            }
+        }
+        
+        async function updateSinglePlayer() {
+            const ladderName = document.getElementById('gradualLadderSelect').value;
+            const container = document.getElementById('gradualResults');
+            
+            container.innerHTML = '<div class="loading">Updating single player... This may take a few minutes.</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/update-single-player/${ladderName}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    let html = '<div class="success">Single Player Update Completed!</div>';
+                    html += `<p><strong>Player:</strong> ${result.result.player}</p>`;
+                    html += `<p><strong>Old Rating:</strong> ${result.result.oldRating}</p>`;
+                    html += `<p><strong>New Rating:</strong> ${result.result.newRating}</p>`;
+                    html += `<p><strong>Next Index:</strong> ${result.result.nextIndex}</p>`;
+                    
+                    if (result.result.oldRating !== result.result.newRating) {
+                        html += '<p><strong>Status:</strong> <span style="color: green;">Rating Updated!</span></p>';
+                    } else if (result.result.noChange) {
+                        html += '<p><strong>Status:</strong> No rating change</p>';
+                    } else {
+                        html += '<p><strong>Status:</strong> Player not found on FargoRate</p>';
+                    }
+                    
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `<div class="error">Error: ${result.error || 'Update failed'}</div>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="error">Error updating player: ${error.message}</div>`;
+            }
+        }
+        
+        async function resetPlayerIndex() {
+            const ladderName = document.getElementById('gradualLadderSelect').value;
+            const container = document.getElementById('gradualResults');
+            
+            const confirm = confirm(`Reset the player index for ${ladderName}? This will start the gradual update cycle from the beginning.`);
+            if (!confirm) return;
+            
+            container.innerHTML = '<div class="loading">Resetting player index...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/reset-player-index/${ladderName}`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    container.innerHTML = `<div class="success">Player index reset successfully!</div><p>New index: ${result.newIndex}</p>`;
+                } else {
+                    container.innerHTML = `<div class="error">Error: ${result.error}</div>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="error">Error resetting index: ${error.message}</div>`;
+            }
+        }
+
+        // Load initial data
+        loadCurrentRatings();
+        checkSystemHealth();
+        getPlayerIndex(); // Show gradual update progress
+    </script>
+</body>
+</html>

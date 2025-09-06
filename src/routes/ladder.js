@@ -529,6 +529,40 @@ router.post('/challenge', async (req, res) => {
     await challenger.save();
     await defender.save();
     
+    // Send notification email to defender
+    try {
+      const { sendChallengeNotificationEmail } = await import('../services/nodemailerService.js');
+      
+      const emailData = {
+        to_email: defender.email,
+        to_name: `${defender.firstName} ${defender.lastName}`,
+        from_name: `${challenger.firstName} ${challenger.lastName}`,
+        challenge_type: challengeType,
+        entry_fee: entryFee,
+        race_length: raceLength,
+        game_type: gameType,
+        table_size: tableSize,
+        location: 'Legends Brews & Cues', // Default location
+        preferred_dates: preferredDates ? preferredDates.map(date => new Date(date).toLocaleDateString('en-US', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        })).join(', ') : 'To be discussed',
+        challenge_message: postContent,
+        challenger_position: challenger.position,
+        defender_position: defender.position,
+        ladder_name: challenger.ladderName,
+        app_url: 'https://newapp-1-ic1v.onrender.com'
+      };
+      
+      await sendChallengeNotificationEmail(emailData);
+      console.log('📧 Challenge notification email sent to defender');
+    } catch (emailError) {
+      console.error('Error sending challenge notification email:', emailError);
+      // Don't fail the challenge creation if email fails
+    }
+    
     res.status(201).json(challenge);
   } catch (error) {
     console.error('Error creating challenge:', error);
@@ -566,7 +600,8 @@ router.get('/challenges/sent/:email', async (req, res) => {
     
     const sentChallenges = await LadderChallenge.find({
       challenger: player._id,
-      status: { $in: ['pending', 'accepted', 'scheduled'] }
+      status: { $in: ['pending', 'accepted', 'scheduled'] },
+      isAdminCreated: { $ne: true } // Exclude admin-created challenges
     }).populate('defender', 'firstName lastName email ladderName position');
     
     res.json(sentChallenges);
@@ -588,7 +623,8 @@ router.get('/challenges/pending/:email', async (req, res) => {
     
     const pendingChallenges = await LadderChallenge.find({
       defender: player._id,
-      status: 'pending'
+      status: 'pending',
+      isAdminCreated: { $ne: true } // Exclude admin-created challenges
     }).populate('challenger', 'firstName lastName email ladderName position');
     
     res.json(pendingChallenges);
@@ -602,7 +638,7 @@ router.get('/challenges/pending/:email', async (req, res) => {
 router.post('/challenge/:challengeId/accept', async (req, res) => {
   try {
     const { challengeId } = req.params;
-    const { responseContent } = req.body;
+    const { responseContent, selectedDate } = req.body;
     
     const challenge = await LadderChallenge.findById(challengeId)
       .populate('challenger defender');
@@ -621,6 +657,12 @@ router.post('/challenge/:challengeId/accept', async (req, res) => {
       acceptedBy: challenge.defender._id,
       responseContent
     };
+    
+    // Set the agreed date if one was selected
+    if (selectedDate) {
+      challenge.matchDetails.agreedDate = new Date(selectedDate);
+      challenge.status = 'scheduled'; // Update status to scheduled since we have a date
+    }
     
     await challenge.save();
     
@@ -649,7 +691,23 @@ router.get('/player/:email/matches', async (req, res) => {
     const { email } = req.params;
     const { limit = 10 } = req.query;
     
-    const player = await LadderPlayer.getPlayerByEmail(email);
+    // First try to find player by email
+    let player = await LadderPlayer.getPlayerByEmail(email);
+    
+    // If not found by email, try to find by name (for players without email in ladder system)
+    if (!player) {
+      // Check if there's a league player with this email
+      const leaguePlayer = await User.findOne({ email: email.toLowerCase() });
+      if (leaguePlayer) {
+        // Try to find ladder player by name
+        player = await LadderPlayer.findOne({
+          firstName: { $regex: new RegExp(`^${leaguePlayer.firstName}$`, 'i') },
+          lastName: { $regex: new RegExp(`^${leaguePlayer.lastName}$`, 'i') },
+          isActive: true
+        });
+      }
+    }
+    
     if (!player) {
       return res.status(404).json({ error: 'Player not found' });
     }
@@ -659,6 +717,34 @@ router.get('/player/:email/matches', async (req, res) => {
   } catch (error) {
     console.error('Error fetching player matches:', error);
     res.status(500).json({ error: 'Failed to fetch player matches' });
+  }
+});
+
+// Get last match for a player (for ladder dashboard)
+router.get('/matches/last-match/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    const player = await LadderPlayer.getPlayerByEmail(email);
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    
+    // Get the most recent match for this player (completed or scheduled)
+    const lastMatch = await LadderMatch.findOne({
+      $or: [{ player1: player._id }, { player2: player._id }]
+    })
+    .populate('player1 player2 winner loser', 'firstName lastName email ladderName position')
+    .sort({ scheduledDate: -1 });
+    
+    if (!lastMatch) {
+      return res.json(null); // No matches found
+    }
+    
+    res.json(lastMatch);
+  } catch (error) {
+    console.error('Error fetching last match:', error);
+    res.status(500).json({ error: 'Failed to fetch last match' });
   }
 });
 
@@ -1088,6 +1174,187 @@ router.post('/apply-for-ladder', async (req, res) => {
   } catch (error) {
     console.error('Error submitting ladder application:', error);
     res.status(500).json({ error: 'Failed to submit application' });
+  }
+});
+
+// Get matches for a ladder (with optional status filter)
+router.get('/:leagueId/ladders/:ladderId/matches', async (req, res) => {
+  try {
+    const { leagueId, ladderId } = req.params;
+    const { status } = req.query;
+
+    // Build query filter
+    const filter = {};
+    if (status) {
+      filter.status = status;
+    }
+
+    // Get matches for this ladder
+    const matches = await LadderMatch.find({
+      $or: [
+        { player1Ladder: ladderId },
+        { player2Ladder: ladderId }
+      ],
+      ...filter
+    })
+    .populate('player1 player2 winner loser reportedBy', 'firstName lastName email ladderName position')
+    .populate('challengeId')
+    .sort({ scheduledDate: -1 });
+
+    res.json({
+      success: true,
+      matches: matches,
+      count: matches.length
+    });
+
+  } catch (error) {
+    console.error('Error fetching matches:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch matches',
+      error: error.message
+    });
+  }
+});
+
+// Create a match (Admin only)
+router.post('/:leagueId/ladders/:ladderId/matches', async (req, res) => {
+  try {
+    const { leagueId, ladderId } = req.params;
+    const {
+      challengerId,
+      defenderId,
+      matchType,
+      matchFormat, // Frontend sends this instead of raceLength
+      raceLength,
+      gameType,
+      tableSize,
+      proposedDate,
+      location,
+      notes
+    } = req.body;
+
+    // Validate required fields
+    if (!challengerId || !defenderId || !matchType || !proposedDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: challengerId, defenderId, matchType, proposedDate'
+      });
+    }
+
+    // Set default values for missing fields
+    const finalRaceLength = raceLength || (matchFormat ? parseInt(matchFormat.split('-')[2]) : 5);
+    const finalGameType = gameType || '8-ball';
+    const finalTableSize = tableSize || '7-foot';
+
+    // Get players
+    const challenger = await LadderPlayer.findById(challengerId);
+    const defender = await LadderPlayer.findById(defenderId);
+
+    if (!challenger || !defender) {
+      return res.status(404).json({
+        success: false,
+        message: 'One or both players not found'
+      });
+    }
+
+    // Validate players are on the same ladder
+    if (challenger.ladderName !== defender.ladderName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Players must be on the same ladder'
+      });
+    }
+
+    // Create a challenge first (since matches are created from challenges)
+    const challenge = new LadderChallenge({
+      challengeType: matchType,
+      challenger: challenger._id,
+      defender: defender._id,
+      status: 'accepted', // Auto-accept admin-created matches
+      isAdminCreated: true, // Mark as admin-created
+      matchDetails: {
+        entryFee: 0, // Default for admin-created matches
+        raceLength: finalRaceLength,
+        gameType: finalGameType,
+        tableSize: finalTableSize,
+        preferredDates: [new Date(proposedDate)]
+      },
+      challengePost: {
+        postContent: notes || 'Admin-created match'
+      },
+      deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
+    });
+
+    await challenge.save();
+
+    // Create the match from the challenge
+    const match = new LadderMatch({
+      challengeId: challenge._id,
+      matchType: matchType,
+      player1: challenger._id,
+      player2: defender._id,
+      entryFee: 0,
+      raceLength: finalRaceLength,
+      gameType: finalGameType,
+      tableSize: finalTableSize,
+      winner: null, // Will be set when match is completed
+      loser: null,
+      score: '', // Will be set when match is completed
+      player1OldPosition: challenger.position,
+      player1NewPosition: challenger.position, // Will be updated when match is completed
+      player2OldPosition: defender.position,
+      player2NewPosition: defender.position, // Will be updated when match is completed
+      player1Ladder: challenger.ladderName,
+      player2Ladder: defender.ladderName,
+      scheduledDate: new Date(proposedDate),
+      completedDate: null, // Will be set when match is completed
+      venue: location || 'Legends Brews & Cues',
+      status: 'scheduled'
+    });
+
+    await match.save();
+
+    // Add challenge to players' active challenges
+    challenger.activeChallenges.push({
+      challengeId: challenge._id,
+      type: matchType,
+      status: 'accepted'
+    });
+
+    defender.activeChallenges.push({
+      challengeId: challenge._id,
+      type: matchType,
+      status: 'accepted'
+    });
+
+    await challenger.save();
+    await defender.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Match created successfully',
+      match: {
+        id: match._id,
+        challenger: `${challenger.firstName} ${challenger.lastName}`,
+        defender: `${defender.firstName} ${defender.lastName}`,
+        matchType: matchType,
+        raceLength: finalRaceLength,
+        gameType: finalGameType,
+        tableSize: finalTableSize,
+        scheduledDate: proposedDate,
+        location: location || 'Legends Brews & Cues',
+        status: 'scheduled'
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating match:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create match',
+      error: error.message
+    });
   }
 });
 

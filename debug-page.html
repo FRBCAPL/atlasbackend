@@ -1,0 +1,629 @@
+<!DOCTYPE html><html><head>
+  <link rel="stylesheet" type="text/css" class="__meteor-css__" href="/d1b301017140cd9b6d245b8638bb5cd903175751.css?meteor_css_resource=true">
+<meta charset="utf-8">
+    <title>FargoRate - FairMatch</title>
+    <meta name="description" content="Setup fair matches between players of different abilities.">
+    <meta name="viewport" content="width=device-width, height=device-width, user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="apple-touch-icon" href="/img/icon_120.png">
+    <script src="https://pagead2.googlesyndication.com/pagead/managed/js/adsense/m202509020101/reactive_library_fy2021.js"></script><script src="https://pagead2.googlesyndication.com/pagead/managed/js/adsense/m202509020101/show_ads_impl_fy2021.js"></script><script async="" src="//www.google-analytics.com/analytics.js"></script><script async="" src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+
+<meta http-equiv="origin-trial" content="AlK2UR5SkAlj8jjdEc9p3F3xuFYlF6LYjAML3EOqw1g26eCwWPjdmecULvBH5MVPoqKYrOfPhYVL71xAXI1IBQoAAAB8eyJvcmlnaW4iOiJodHRwczovL2RvdWJsZWNsaWNrLm5ldDo0NDMiLCJmZWF0dXJlIjoiV2ViVmlld1hSZXF1ZXN0ZWRXaXRoRGVwcmVjYXRpb24iLCJleHBpcnkiOjE3NTgwNjcxOTksImlzU3ViZG9tYWluIjp0cnVlfQ=="><meta http-equiv="origin-trial" content="Amm8/NmvvQfhwCib6I7ZsmUxiSCfOxWxHayJwyU1r3gRIItzr7bNQid6O8ZYaE1GSQTa69WwhPC9flq/oYkRBwsAAACCeyJvcmlnaW4iOiJodHRwczovL2dvb2dsZXN5bmRpY2F0aW9uLmNvbTo0NDMiLCJmZWF0dXJlIjoiV2ViVmlld1hSZXF1ZXN0ZWRXaXRoRGVwcmVjYXRpb24iLCJleHBpcnkiOjE3NTgwNjcxOTksImlzU3ViZG9tYWluIjp0cnVlfQ=="><meta http-equiv="origin-trial" content="A9nrunKdU5m96PSN1XsSGr3qOP0lvPFUB2AiAylCDlN5DTl17uDFkpQuHj1AFtgWLxpLaiBZuhrtb2WOu7ofHwEAAACKeyJvcmlnaW4iOiJodHRwczovL2RvdWJsZWNsaWNrLm5ldDo0NDMiLCJmZWF0dXJlIjoiQUlQcm9tcHRBUElNdWx0aW1vZGFsSW5wdXQiLCJleHBpcnkiOjE3NzQzMTA0MDAsImlzU3ViZG9tYWluIjp0cnVlLCJpc1RoaXJkUGFydHkiOnRydWV9"><meta http-equiv="origin-trial" content="A93bovR+QVXNx2/38qDbmeYYf1wdte9EO37K9eMq3r+541qo0byhYU899BhPB7Cv9QqD7wIbR1B6OAc9kEfYCA4AAACQeyJvcmlnaW4iOiJodHRwczovL2dvb2dsZXN5bmRpY2F0aW9uLmNvbTo0NDMiLCJmZWF0dXJlIjoiQUlQcm9tcHRBUElNdWx0aW1vZGFsSW5wdXQiLCJleHBpcnkiOjE3NzQzMTA0MDAsImlzU3ViZG9tYWluIjp0cnVlLCJpc1RoaXJkUGFydHkiOnRydWV9"><meta http-equiv="origin-trial" content="A1S5fojrAunSDrFbD8OfGmFHdRFZymSM/1ss3G+NEttCLfHkXvlcF6LGLH8Mo5PakLO1sCASXU1/gQf6XGuTBgwAAACQeyJvcmlnaW4iOiJodHRwczovL2dvb2dsZXRhZ3NlcnZpY2VzLmNvbTo0NDMiLCJmZWF0dXJlIjoiQUlQcm9tcHRBUElNdWx0aW1vZGFsSW5wdXQiLCJleHBpcnkiOjE3NzQzMTA0MDAsImlzU3ViZG9tYWluIjp0cnVlLCJpc1RoaXJkUGFydHkiOnRydWV9"><link type="text/css" rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css"></head>
+<body aria-hidden="false" style="padding: 154px 0px 0px;">
+  <script type="text/javascript">__meteor_runtime_config__ = JSON.parse(decodeURIComponent("%7B%22meteorRelease%22%3A%22METEOR%401.6.1.1%22%2C%22meteorEnv%22%3A%7B%22NODE_ENV%22%3A%22production%22%2C%22TEST_METADATA%22%3A%22%7B%7D%22%7D%2C%22PUBLIC_SETTINGS%22%3A%7B%22ga%22%3A%7B%22account%22%3A%22UA-63790414-3%22%7D%7D%2C%22ROOT_URL%22%3A%22https%3A%2F%2Ffairmatch.fargorate.com%22%2C%22ROOT_URL_PATH_PREFIX%22%3A%22%22%2C%22appId%22%3A%22ne2gp9fkq9wo10cmv2t%22%2C%22autoupdateVersion%22%3A%2238bf1a60ea9dee8f456ee64e5fbf1affae4a0344%22%2C%22autoupdateVersionRefreshable%22%3A%22598822a2324802d53a2f2a475188a064f9d9f5b6%22%2C%22autoupdateVersionCordova%22%3A%22none%22%7D"))</script>
+
+  <script type="text/javascript" src="/460cc02d639abf61f9eeeddd1972ca96067c8e80.js?meteor_js_resource=true"></script>
+
+
+
+<div class="container-fluid" style="height: auto !important;">
+        <div class="row">
+            <div class="col-xs-12 text-center">
+                <ins class="adsbygoogle" style="display: block; height: 280px;" data-ad-client="ca-pub-6274372985288030" data-ad-slot="9538326285" data-ad-format="auto" data-full-width-responsive="true" data-adsbygoogle-status="done" data-ad-status="filled"><div id="aswift_0_host" style="border: none; height: 280px; width: 1200px; margin: 0px; padding: 0px; position: relative; visibility: visible; background-color: transparent; display: inline-block; overflow: visible;"><iframe id="aswift_0" name="aswift_0" browsingtopics="true" style="left:0;position:absolute;top:0;border:0;width:1200px;height:280px;min-height:auto;max-height:none;min-width:auto;max-width:none;" sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-top-navigation-by-user-activation" width="1200" height="280" frameborder="0" marginwidth="0" marginheight="0" vspace="0" hspace="0" allowtransparency="true" scrolling="no" allow="attribution-reporting; run-ad-auction" src="https://googleads.g.doubleclick.net/pagead/ads?client=ca-pub-6274372985288030&amp;output=html&amp;h=280&amp;slotname=9538326285&amp;adk=3910350977&amp;adf=2369281301&amp;pi=t.ma~as.9538326285&amp;w=1200&amp;fwrn=4&amp;fwrnh=100&amp;lmt=1757099770&amp;rafmt=1&amp;format=1200x280&amp;url=https%3A%2F%2Ffairmatch.fargorate.com%2F&amp;fwr=0&amp;fwrattr=true&amp;rpe=1&amp;resp_fmts=3&amp;wgl=1&amp;aieuf=1&amp;uach=WyIiLCIiLCIiLCIiLCIiLG51bGwsMCxudWxsLCIiLG51bGwsMF0.&amp;abgtt=13&amp;dt=1757099770621&amp;bpp=57&amp;bdt=490&amp;idt=160&amp;shv=r20250903&amp;mjsv=m202509020101&amp;ptt=9&amp;saldr=aa&amp;abxe=1&amp;cookie_enabled=1&amp;eoidce=1&amp;correlator=527932445543&amp;frm=20&amp;pv=2&amp;u_tz=-360&amp;u_his=2&amp;u_h=1080&amp;u_w=1920&amp;u_ah=1080&amp;u_aw=1920&amp;u_cd=24&amp;u_sd=1&amp;dmc=8&amp;adx=33&amp;ady=0&amp;biw=1265&amp;bih=720&amp;scr_x=0&amp;scr_y=0&amp;eid=31094362%2C31094370%2C42531706%2C95369803%2C95370331%2C42533293%2C95371482&amp;oid=2&amp;pvsid=5168887273869914&amp;tmod=1618026533&amp;uas=0&amp;nvt=1&amp;fc=896&amp;brdim=10%2C10%2C10%2C10%2C1920%2C0%2C945%2C1020%2C1280%2C720&amp;vis=1&amp;rsz=%7C%7CEe%7C&amp;abl=CS&amp;pfx=0&amp;fu=128&amp;bc=31&amp;bz=0.74&amp;td=1&amp;tdf=2&amp;psd=W251bGwsW251bGwsbnVsbCxudWxsLCJkZXByZWNhdGVkX2thbm9uIl0sbnVsbCwxXQ..&amp;nt=1&amp;ifi=1&amp;uci=a!1&amp;fsb=1&amp;dtd=208" data-google-container-id="a!1" tabindex="0" title="Advertisement" aria-label="Advertisement" data-google-query-id="CMCF792qwo8DFVWpjggdSMkCYg" data-load-complete="true"></iframe></div></ins>
+                <script>
+                    (adsbygoogle = window.adsbygoogle || []).push({});
+                </script>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-xs-12">
+                <ul class="notifications">
+       
+    </ul>
+    <header>
+        <img class="header-image" src="img/logotype.svg">
+        <div class="beta-tag">BETA v0.2.1</div>
+        <div id="notice-container"><div class="notice">More and more "top player" lists appearing in the APP.  Now Canada top 100, Oklahoma top 100 Alaska top 50, Arizona top 100 Sweden top 100, North Dakota top 50.  Download the FargoRate APP.</div></div>
+    </header>
+    <div class="help-image-wrapper" id="help-image-wrapper">
+        <div class="help-image">
+        </div>
+    </div>
+    <div class="page" id="login">
+        <div class="content-scrollable">
+            <div class="search-section">
+                <div>
+                    <p class="subtitle-auth">Need to just lookup a player?</p>
+                </div>
+                <button class="btn-default" id="go-to-search-btn" style="height:48px;padding:16px;color:white;margin:16px;">Search
+                    for Players</button>
+            </div>
+            <div>
+                <p class="subtitle-auth">- or - </p>
+            </div>
+            <div class="wrapper-auth">
+                <h1 class="title-auth">Sign In.</h1>
+                <p class="subtitle-auth">Signing in allows you to create your own player lists.</p>
+
+                <form id="login-form" action="action">
+                    
+                    <div class="list-errors">
+                        
+                        <div class="list-item">Email is required</div>
+                        
+                        <div class="list-item">Password is required</div>
+                        
+                    </div>
+                    
+
+                    <div class="input-symbol error">
+                        <input class="new" type="email" name="login-email" placeholder="Your Email">
+                        <span class="icon-email" title="Your Email"></span>
+                    </div>
+
+                    <div class="input-symbol error">
+                        <input class="new" type="password" name="login-password" placeholder="Password">
+                        <span class="icon-lock" title="Password"></span>
+                    </div>
+
+                    <button type="submit" class="btn-primary login">Sign in</button>
+                </form>
+            </div>
+
+            <a href="#" class="link-auth-alt" id="auth-join">Need an account? Join Now</a><br>
+            <a href="#" class="link-auth-alt" id="auth-recover">Forgot your password? No problem</a>
+        </div>
+    </div>
+    <div class="page" id="direct-search-page" style="display: none">
+        <section id="input-2">
+            <div class="container">
+                <div class="row">
+                    <div class="col-xs-6 col-sm-4 col-sm-offset-3">
+                        <input type="text" class="form-control" style="display:table-cell" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off" id="searchText-2" placeholder="Player name or id">
+                    </div>
+                    <div class="col-xs-6 col-sm-3">
+                        <div class="pull-right">
+                            <button type="button" class="btn btn-primary" style="display:table-cell;margin-top:-2px;" id="searchPlayer-2">Lookup</button>
+                            <button type="button" class="btn btn-secondary" style="display:table-cell;margin-top:-2px" id="showHelp">?</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-xs-12 col-sm-7 col-sm-offset-3">
+                        <div id="resultsContainer-2">
+                            <table id="searchResults-2" class="table table-condensed">
+                                <thead>
+                                    <tr>
+                                        <th>Player (Membership Id #)</th>
+                                        <th class="text-right">Official Rating</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+    <div class="page" id="register" style="display: none">
+        <div class="content-scrollable">
+            <div class="wrapper-auth">
+                <h1 class="title-auth">Join.</h1>
+                <p class="subtitle-auth">Joining allows you to create private custom player lists.</p>
+
+                <form id="register-form" action="action">
+                    
+                    <div class="list-errors">
+                        
+                        <div class="list-item">Email is required</div>
+                        
+                        <div class="list-item">Password is required</div>
+                        
+                    </div>
+                    
+
+                    <div class="input-symbol error">
+                        <input type="email" name="join-email" placeholder="Your Email">
+                        <span class="icon-email" title="Your Email"></span>
+                    </div>
+
+                    <div class="input-symbol error">
+                        <input type="password" name="join-password" placeholder="Password">
+                        <span class="icon-lock" title="Password"></span>
+                    </div>
+
+                    <div class="input-symbol">
+                        <input type="password" name="join-confirm" placeholder="Confirm Password">
+                        <span class="icon-lock" title="Confirm Password"></span>
+                    </div>
+
+                    <button type="submit" class="btn-primary login">Join Now</button>
+                </form>
+            </div>
+
+            <a href="#" class="link-auth-alt" id="auth-login">Have an account? Sign in</a><br>
+            <a href="#" class="link-auth-alt" id="auth-recover">Forgot your password? No problem</a>
+        </div>
+    </div>
+    <div class="page" id="recoverPassword" style="display: none">
+        <div class="content-scrollable">
+            <div class="wrapper-auth">
+                <h1 class="title-auth">Forgot your password?</h1>
+                <p class="subtitle-auth">Enter your email address and we'll send you an email to reset your password.
+                </p>
+
+                <form id="recover-form" action="action">
+                    
+                    <div class="list-errors">
+                        
+                        <div class="list-item">Email is required</div>
+                        
+                        <div class="list-item">Password is required</div>
+                        
+                    </div>
+                    
+
+                    <div class="input-symbol error">
+                        <input type="email" name="recover-email" placeholder="Your Email">
+                        <span class="icon-email" title="Your Email"></span>
+                    </div>
+                    <p class="subtitle-auth" id="recover-messages" style="margin-top:10px;"></p>
+
+                    <button type="submit" class="btn-primary send-reset" style="line-height:44px;">Send Reset
+                        Email</button>
+                </form>
+            </div>
+
+            <a href="#" class="link-auth-alt" id="auth-login">Have an account? Sign in</a>
+        </div>
+    </div>
+    <div class="page" id="resetPassword" style="display:none;">
+        <div class="content-scrollable">
+            <div class="wrapper-auth">
+                <h1 class="title-auth">Reset Password.</h1>
+                <p class="subtitle-auth">Enter your new password.</p>
+
+                <form id="reset-form" action="action">
+                    
+                    <div class="list-errors">
+                        
+                        <div class="list-item">Email is required</div>
+                        
+                        <div class="list-item">Password is required</div>
+                        
+                    </div>
+                    
+
+                    <div class="input-symbol error">
+                        <input type="password" name="reset-password" placeholder="Password">
+                        <span class="icon-lock" title="Password"></span>
+                    </div>
+
+                    <div class="input-symbol">
+                        <input type="password" name="reset-confirm" placeholder="Confirm Password">
+                        <span class="icon-lock" title="Confirm Password"></span>
+                    </div>
+                    <p class="subtitle-auth" id="reset-messages" style="margin-top:10px;"></p>
+
+                    <button type="submit" class="btn-primary reset">Save Password</button>
+                </form>
+            </div>
+
+            <a href="#" class="link-auth-alt" id="auth-login">Have an account? Sign in</a><br>
+            <a href="#" class="link-auth-alt" id="auth-recover">Forgot your password? No problem</a>
+        </div>
+    </div>
+    <div class="page" id="home" style="display: none">
+        <div class="row">
+            <div class="col-xs-6 home-button text-right">
+                <button id="gotoSearch" type="button" class="btn btn-primary btn-lg">
+                    <div class="row">
+                        <div class="col-xs-12">
+                            <i class="fa fa-search"></i>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-xs-12 text-center">
+                            <h3>Find a Player</h3>
+                            <small>Lookup a player's rating</small>
+                        </div>
+                    </div>
+                </button>
+            </div>
+            <div class="col-xs-6 home-button ">
+                <button id="gotoRaces" type="button" class="btn btn-primary btn-lg">
+                    <div class="row">
+                        <div class="col-xs-12">
+                            <i class="fa fa-flag-checkered"></i>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-xs-12 text-center">
+                            <h3>Find a Fair Match</h3>
+                            <small>Find an even match</small>
+                        </div>
+                    </div>
+                </button>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-xs-6 home-button text-right">
+                <button id="gotoOdds" type="button" class="btn btn-primary btn-lg">
+                    <div class="row">
+                        <div class="col-xs-12">
+                            <i class="fa fa-calculator"></i>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-xs-12 text-center">
+                            <h3>Find Match Odds</h3>
+                            <small>Lookup odds for a match</small>
+                        </div>
+                    </div>
+                </button>
+            </div>
+            <div class="col-xs-6 home-button ">
+                <button id="gotoTopTens" type="button" class="btn btn-primary btn-lg">
+                    <div class="row">
+                        <div class="col-xs-12">
+                            <i class="fa fa-list-ol"></i>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-xs-12 text-center">
+                            <h3>Top 10 Lists</h3>
+                            <small>View the top 10 lists</small>
+                        </div>
+                    </div>
+                </button>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-xs-6 home-button text-right">
+                <button id="gotoCustomLists" type="button" class="btn btn-primary btn-lg">
+                    <div class="row">
+                        <div class="col-xs-12">
+                            <i class="fa fa-star"></i>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-xs-12 text-center">
+                            <h3>Favorites</h3>
+                            <small>View your favorite players</small>
+                        </div>
+                    </div>
+                </button>
+            </div>
+            <div class="col-xs-6 home-button">
+                <button id="gotoCharts" type="button" class="btn btn-primary btn-lg">
+                    <div class="row">
+                        <div class="col-xs-12">
+                            <i class="fa fa-calculator"></i>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-xs-12 text-center">
+                            <h3>Match Charts</h3>
+                            <small>View tourney match charts</small>
+                        </div>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+
+    </div>
+    <div class="page" id="pageOne" style="display: none">
+        <section id="input">
+            <div class="row">
+                <div class="col-xs-6 col-sm-offset-3 col-sm-3 text-center">
+                    <div>Player One</div>
+                    <div>
+                        <input type="tel" class="form-control" style="text-align:center;" id="playerOneRating" placeholder="Rating (999)">
+                    </div>
+                    <div>
+                        <span>- or -</span>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-primary" id="search-player-one">Lookup
+                            Player</button>
+                        <br>
+                        <br>
+                    </div>
+                    <div>Race To</div>
+                    <div>
+                        <input type="tel" class="form-control" style="text-align:center;" id="playerOneRaceTo" placeholder="Race To (99)">
+                    </div>
+                </div>
+                <div class="col-xs-6 col-sm-3 text-center">
+                    <div>Player Two</div>
+                    <div>
+                        <input type="tel" class="form-control" style="text-align:center;" id="playerTwoRating" placeholder="Rating (999)">
+                    </div>
+                    <div>
+                        <span>- or -</span>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-primary" id="search-player-two">Lookup
+                            Player</button>
+                        <br>
+                        <br>
+                    </div>
+                    <div>Race To</div>
+                    <div>
+                        <input type="tel" class="form-control" style="text-align:center;" id="playerTwoRaceTo" placeholder="Race To (99)">
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-xs-12 text-center">
+                    <br>
+                    <button id="calculate2" type="button" class="btn btn-primary">Calculate</button>
+                </div>
+            </div>
+        </section>
+        <section id="results" style="display: none">
+            <div class="row">
+                <div class="col-xs-6 col-sm-offset-3 col-sm-3 text-center">
+                    <span id="playerOnePercent" class="result percent">15%</span>
+                </div>
+                <div class="col-xs-6 col-sm-3 text-center">
+                    <span id="playerTwoPercent" class="result percent">15%</span>
+                </div>
+            </div>
+        </section>
+    </div>
+    <div class="page" id="pageTwo" style="display: none">
+        <section id="input">
+            <div class="row">
+                <div class="col-xs-6 col-sm-4 col-sm-offset-3">
+                    <input type="text" class="form-control" style="display:table-cell" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off" id="searchText" placeholder="Player name or id">
+                </div>
+                <div class="col-xs-6 col-sm-3">
+                    <div class="pull-right">
+                        <button type="button" class="btn btn-primary" style="display:table-cell;margin-top:-2px;" id="searchPlayer">Lookup</button>
+                        <button type="button" class="btn btn-secondary" style="display:table-cell;margin-top:-2px" id="showHelp">?</button>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-xs-12 col-sm-7 col-sm-offset-3">
+                    <div id="resultsContainer">
+                        <table id="searchResults" class="table table-condensed">
+                            <thead>
+                                <tr>
+                                    <th>Player (Membership Id #)</th>
+                                    <th class="text-right">Official Rating</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+    <div class="page" id="charts" style="display: none">
+        <section id="input">
+            <div class="row">
+                <div class="col-xs-6 col-sm-offset-3 col-sm-3 text-center">
+                    <div>Player One</div>
+                    <div>
+                        <input type="tel" class="form-control" style="text-align:center;" id="playerOneRating" placeholder="Rating (999)">
+                    </div>
+                    <div>
+                        <span>- or -</span>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-primary" id="search-player-one">Lookup
+                            Player</button>
+                        <br>
+                        <br>
+                    </div>
+                </div>
+                <div class="col-xs-6 col-sm-3 text-center">
+                    <div>Player Two</div>
+                    <div>
+                        <input type="tel" class="form-control" style="text-align:center;" id="playerTwoRating" placeholder="Rating (999)">
+                    </div>
+                    <div>
+                        <span>- or -</span>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-primary" id="search-player-two">Lookup
+                            Player</button>
+                        <br>
+                        <br>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <section>
+            <div class="row">
+                <div class="col-xs-12 text-center">
+                    <div class="btn-group">
+                        <button class="btn btn-primary calc-race" data-race="2">R2</button>
+                        <button class="btn btn-primary calc-race" data-race="3">R3</button>
+                        <button class="btn btn-primary calc-race" data-race="4">R4</button>
+                        <button class="btn btn-primary calc-race" data-race="5">R5</button>
+                        <button class="btn btn-primary calc-race" data-race="6">R6</button>
+                        <button class="btn btn-primary calc-race" data-race="7">R7</button>
+                        <button class="btn btn-primary calc-race" data-race="9">R9</button>
+                        <button class="btn btn-primary calc-race" data-race="11">R11</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <section id="results">
+            <div class="raceResultsContainer container">
+                <div class="row">
+                    <div class="col-xs-4 text-center" id="hotrace">
+                        <div class="race-type-title">Hot</div>
+                        <div class="text-center" id="raceText2">
+                        </div>
+                    </div>
+                    <div class="col-xs-4 text-center" id="mediumrace">
+                        <div class="race-type-title">Medium</div>
+                        <div class="text-center" id="raceText1">
+                        </div>
+                    </div>
+                    <div class="col-xs-4 text-center" id="mildrace">
+                        <div class="race-type-title">Mild</div>
+                        <div class="text-center" id="raceText0">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+    <div class="page" id="pageFour" style="display: none">
+        <section id="nav">
+            <div class="row">
+                <div class="col-xs-12 col-sm-6 col-sm-offset-3 text-center">
+                    <a id="topTenWorldMen" class="btn btn-primary top-ten" href="#">Top 10 World M</a>
+                    <a id="topTenWorldWomen" class="btn btn-primary top-ten" href="#">Top 10 World F</a>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-xs-12 col-sm-6 col-sm-offset-3 text-center">
+                    <a id="topTenUSMen" class="btn btn-primary top-ten" href="#">Top 10 USA M</a>
+                    <a id="topTenUSWomen" class="btn btn-primary top-ten" href="#">Top 10 USA F</a>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-xs-12 col-sm-6 col-sm-offset-3">
+                    <div id="topTenResultsContainer">
+                        <table id="topTenResults" class="table table-condensed">
+                            <thead>
+                                <tr>
+                                    <th>Ranking</th>
+                                    <th>Player Name</th>
+                                    <th class="text-center">Country</th>
+                                    <th class="text-center">Official Rating</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+    <div class="page" id="customLists" style="display: none">
+        <section id="nav">
+            <div class="row">
+                <div class="col-xs-12 col-sm-6 col-sm-offset-3">
+                    <div id="customListResultsContainer">
+                        <table id="customListResults" class="table table-condensed">
+                            <thead>
+                                <tr>
+                                    <th>Player (Id #)</th>
+                                    <th class="text-right">Official Rating</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+    <div class="page" id="pageThree" style="display: none">
+        <section id="input">
+            <div class="row">
+                <div class="col-xs-6 col-sm-offset-3 col-sm-3 text-center">
+                    <div>Player One</div>
+                    <div>
+                        <input type="tel" class="form-control" style="text-align:center;" id="playerOneRating" placeholder="Rating (999)">
+                    </div>
+                    <div>
+                        <span>- or -</span>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-primary" id="search-player-one">Lookup
+                            Player</button>
+                        <br>
+                        <br>
+                    </div>
+                </div>
+                <div class="col-xs-6 col-sm-3 text-center">
+                    <div>Player Two</div>
+                    <div>
+                        <input type="tel" class="form-control" style="text-align:center;" id="playerTwoRating" placeholder="Rating (999)">
+                    </div>
+                    <div>
+                        <span>- or -</span>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-primary" id="search-player-two">Lookup
+                            Player</button>
+                        <br>
+                        <br>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-xs-12 text-center">
+                    <button id="calculate3" type="button" class="btn btn-primary">Calculate Races</button>
+                </div>
+            </div>
+        </section>
+        <section id="results">
+            <div class="raceResultsContainer container">
+                <div class="row">
+                    <div class="col-xs-4 text-center" id="hotrace">
+                        <div class="race-type-title">Hot</div>
+                        <div class="text-center" id="raceText2">
+                        </div>
+                    </div>
+                    <div class="col-xs-4 text-center" id="mediumrace">
+                        <div class="race-type-title">Medium</div>
+                        <div class="text-center" id="raceText1">
+                        </div>
+                    </div>
+                    <div class="col-xs-4 text-center" id="mildrace">
+                        <div class="race-type-title">Mild</div>
+                        <div class="text-center" id="raceText0">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    
+            </div>
+        </div>
+        <div style="height: 300px;"></div>
+        <div id="footer">
+        <div class="row">
+            <div class="col-xs-12 text-center">
+                <ins class="adsbygoogle" style="display: block; height: 280px;" data-ad-client="ca-pub-6274372985288030" data-ad-slot="1200477746" data-ad-format="auto" data-full-width-responsive="true" data-adsbygoogle-status="done" data-ad-status="filled"><div id="aswift_1_host" style="border: none; height: 280px; width: 1200px; margin: 0px; padding: 0px; position: relative; visibility: visible; background-color: transparent; display: inline-block; overflow: visible;"><iframe id="aswift_1" name="aswift_1" browsingtopics="true" style="left:0;position:absolute;top:0;border:0;width:1200px;height:280px;min-height:auto;max-height:none;min-width:auto;max-width:none;" sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-top-navigation-by-user-activation" width="1200" height="280" frameborder="0" marginwidth="0" marginheight="0" vspace="0" hspace="0" allowtransparency="true" scrolling="no" allow="attribution-reporting; run-ad-auction" src="https://googleads.g.doubleclick.net/pagead/ads?client=ca-pub-6274372985288030&amp;output=html&amp;h=280&amp;slotname=1200477746&amp;adk=3908919494&amp;adf=115024725&amp;pi=t.ma~as.1200477746&amp;w=1200&amp;fwrn=4&amp;fwrnh=100&amp;lmt=1757099770&amp;rafmt=1&amp;format=1200x280&amp;url=https%3A%2F%2Ffairmatch.fargorate.com%2F&amp;fwr=0&amp;fwrattr=true&amp;rpe=1&amp;resp_fmts=3&amp;wgl=1&amp;aieuf=1&amp;uach=WyIiLCIiLCIiLCIiLCIiLG51bGwsMCxudWxsLCIiLG51bGwsMF0.&amp;abgtt=13&amp;dt=1757099770678&amp;bpp=2&amp;bdt=547&amp;idt=174&amp;shv=r20250903&amp;mjsv=m202509020101&amp;ptt=9&amp;saldr=aa&amp;abxe=1&amp;cookie_enabled=1&amp;eoidce=1&amp;prev_fmts=1200x280&amp;correlator=527932445543&amp;frm=20&amp;pv=1&amp;u_tz=-360&amp;u_his=2&amp;u_h=1080&amp;u_w=1920&amp;u_ah=1080&amp;u_aw=1920&amp;u_cd=24&amp;u_sd=1&amp;dmc=8&amp;adx=33&amp;ady=1134&amp;biw=1265&amp;bih=720&amp;scr_x=0&amp;scr_y=0&amp;eid=31094362%2C31094370%2C42531706%2C95369803%2C95370331%2C42533293%2C95371482&amp;oid=2&amp;pvsid=5168887273869914&amp;tmod=1618026533&amp;uas=0&amp;nvt=1&amp;fc=896&amp;brdim=10%2C10%2C10%2C10%2C1920%2C0%2C945%2C1020%2C1280%2C720&amp;vis=1&amp;rsz=%7C%7CEebr%7C&amp;abl=CS&amp;pfx=0&amp;fu=128&amp;bc=31&amp;bz=0.74&amp;td=1&amp;tdf=2&amp;psd=W251bGwsW251bGwsbnVsbCxudWxsLCJkZXByZWNhdGVkX2thbm9uIl0sbnVsbCwxXQ..&amp;nt=1&amp;ifi=2&amp;uci=a!2&amp;btvi=1&amp;fsb=1&amp;dtd=191" data-google-container-id="a!2" tabindex="0" title="Advertisement" aria-label="Advertisement" data-google-query-id="CLv57t2qwo8DFdzqrQAdyhcZrA" data-load-complete="true"></iframe></div></ins>
+                <script>
+                    (adsbygoogle = window.adsbygoogle || []).push({});
+                </script>
+            </div>
+        </div>
+        <div class="col-xs-12 navbar-inverse navbar-fixed-bottom">
+            <div class="row" id="bottomNav">
+                <button id="menuHome" type="button" class="col-xs-12 text-center menu-button active"><i class="fa fa-home fa-lg"></i><br>Home</button>
+            </div>
+        </div>
+    </div>
+    </div><ins class="adsbygoogle adsbygoogle-noablate" data-adsbygoogle-status="done" style="display: none !important;" data-ad-status="unfilled"><div id="aswift_2_host" style="border: none; height: 0px; width: 0px; margin: 0px; padding: 0px; position: relative; visibility: visible; background-color: transparent; display: inline-block;"><iframe id="aswift_2" name="aswift_2" browsingtopics="true" style="left:0;position:absolute;top:0;border:0;width:undefinedpx;height:undefinedpx;min-height:auto;max-height:none;min-width:auto;max-width:none;" sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-top-navigation-by-user-activation" frameborder="0" marginwidth="0" marginheight="0" vspace="0" hspace="0" allowtransparency="true" scrolling="no" allow="attribution-reporting; run-ad-auction" src="https://googleads.g.doubleclick.net/pagead/ads?client=ca-pub-6274372985288030&amp;output=html&amp;adk=1812271804&amp;adf=3025194257&amp;lmt=1757099770&amp;plaf=7%3A2&amp;plat=1%3A16777216%2C3%3A128%2C4%3A128%2C9%3A32776%2C16%3A8388608%2C17%3A32%2C24%3A32%2C25%3A32%2C30%3A1081344%2C32%3A32%2C41%3A32%2C42%3A32&amp;format=0x0&amp;url=https%3A%2F%2Ffairmatch.fargorate.com%2F&amp;pra=7&amp;wgl=1&amp;aihb=0&amp;asro=0&amp;aifxl=29_18~30_19&amp;aiapm=0.1542&amp;aiapmd=0.1423&amp;aiapmi=0.16&amp;aiapmid=1&amp;aiact=0.5423&amp;aiactd=0.7&amp;aicct=0.7&amp;aicctd=0.5799&amp;ailct=0.5849&amp;ailctd=0.65&amp;aimart=4&amp;aimartd=4&amp;uach=WyIiLCIiLCIiLCIiLCIiLG51bGwsMCxudWxsLCIiLG51bGwsMF0.&amp;abgtt=13&amp;dt=1757099770681&amp;bpp=7&amp;bdt=550&amp;idt=198&amp;shv=r20250903&amp;mjsv=m202509020101&amp;ptt=9&amp;saldr=aa&amp;abxe=1&amp;cookie_enabled=1&amp;eoidce=1&amp;prev_fmts=1200x280%2C1200x280&amp;nras=1&amp;correlator=527932445543&amp;frm=20&amp;pv=1&amp;u_tz=-360&amp;u_his=2&amp;u_h=1080&amp;u_w=1920&amp;u_ah=1080&amp;u_aw=1920&amp;u_cd=24&amp;u_sd=1&amp;dmc=8&amp;adx=-12245933&amp;ady=-12245933&amp;biw=1265&amp;bih=720&amp;scr_x=0&amp;scr_y=0&amp;eid=31094362%2C31094370%2C42531706%2C95369803%2C95370331%2C42533293%2C95371482&amp;oid=2&amp;pvsid=5168887273869914&amp;tmod=1618026533&amp;uas=0&amp;nvt=1&amp;fsapi=1&amp;fc=896&amp;brdim=10%2C10%2C10%2C10%2C1920%2C0%2C945%2C1020%2C1280%2C720&amp;vis=1&amp;rsz=%7C%7Cs%7C&amp;abl=NS&amp;fu=32768&amp;bc=31&amp;bz=0.74&amp;td=1&amp;tdf=2&amp;psd=W251bGwsW251bGwsbnVsbCxudWxsLCJkZXByZWNhdGVkX2thbm9uIl0sbnVsbCwxXQ..&amp;nt=1&amp;ifi=3&amp;uci=a!3&amp;fsb=1&amp;dtd=215" data-google-container-id="a!3" tabindex="0" title="Advertisement" aria-label="Advertisement" data-load-complete="true"></iframe></div></ins><ins class="adsbygoogle adsbygoogle-noablate" data-adsbygoogle-status="done" data-anchor-status="displayed" data-ad-status="filled" style="display: block; width: auto !important; height: 129px !important; bottom: auto !important; clear: none !important; float: none !important; left: 50%; margin: 0px !important; max-height: none !important; max-width: none !important; opacity: 1; overflow: visible !important; padding: 0px !important; position: fixed; right: auto !important; top: 0px; vertical-align: baseline !important; visibility: visible !important; z-index: 2147483647; transform: translateX(-50%); box-shadow: rgba(0, 0, 0, 0.5) 0px 4px 12px -4px, rgba(0, 0, 0, 0.3) 0px -4px 8px -3px; border-radius: 5px; background: rgb(250, 250, 250) !important;" data-anchor-shown="true"><div id="aswift_4_host" style="border: none !important; height: 124px !important; width: 1005px !important; margin: 0px !important; padding: 0px !important; position: relative !important; visibility: visible !important; background-color: transparent !important; display: inline-block !important; inset: auto !important; clear: none !important; float: none !important; max-height: none !important; max-width: none !important; opacity: 1 !important; overflow: visible !important; vertical-align: baseline !important; z-index: auto !important;"><iframe id="aswift_4" name="aswift_4" browsingtopics="true" style="min-height: auto; max-height: none; min-width: auto; max-width: none; width: 1005px !important; height: 124px !important; display: block; margin: 0px auto;" sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-top-navigation-by-user-activation" width="1005" height="124" frameborder="0" marginwidth="0" marginheight="0" vspace="0" hspace="0" allowtransparency="true" scrolling="no" allow="attribution-reporting; run-ad-auction" src="https://googleads.g.doubleclick.net/pagead/html/r20250903/r20190131/zrt_lookup_fy2021.html#RS-1-&amp;adk=1812271802&amp;client=ca-pub-6274372985288030&amp;fa=2&amp;ifi=5&amp;uci=a!5&amp;btvi=2" data-google-container-id="a!5" tabindex="0" title="Advertisement" aria-label="Advertisement" data-google-query-id="COyf792qwo8DFdW0jggddsAVAQ" data-load-complete="true"></iframe></div><div class="grippy-host" style="position: absolute !important; top: 124px !important; width: 100% !important;"></div></ins><iframe src="https://www.google.com/recaptcha/api2/aframe" width="0" height="0" style="display: none;"></iframe></body><iframe id="google_esf" name="google_esf" src="https://googleads.g.doubleclick.net/pagead/html/r20250903/r20190131/zrt_lookup_fy2021.html" style="display: none;"></iframe><ins class="adsbygoogle adsbygoogle-noablate" data-adsbygoogle-status="done" style="display: none !important; width: 100vw !important; height: 100vh !important; inset: 0px auto auto 0px !important; clear: none !important; float: none !important; margin: 0px !important; max-height: none !important; max-width: none !important; opacity: 1 !important; overflow: visible !important; padding: 0px !important; position: fixed !important; vertical-align: baseline !important; visibility: visible !important; z-index: 2147483647 !important; background: transparent !important;" aria-hidden="true" data-ad-status="filled" data-vignette-loaded="true"><div id="aswift_3_host" style="border: none !important; height: 100vh !important; width: 100vw !important; margin: 0px !important; padding: 0px !important; position: relative !important; visibility: visible !important; background-color: transparent !important; display: inline-block !important; inset: auto !important; clear: none !important; float: none !important; max-height: none !important; max-width: none !important; opacity: 1 !important; overflow: visible !important; vertical-align: baseline !important; z-index: auto !important;"><iframe id="aswift_3" name="aswift_3" browsingtopics="true" style="min-height: auto !important; max-height: none !important; min-width: auto !important; max-width: none !important; width: 100vw !important; height: 100vh !important; inset: 0px auto auto 0px !important; position: absolute !important; clear: none !important; display: inline !important; float: none !important; margin: 0px !important; opacity: 1 !important; overflow: visible !important; padding: 0px !important; vertical-align: baseline !important; visibility: visible !important; z-index: auto !important;" sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-top-navigation-by-user-activation" width="" height="" frameborder="0" marginwidth="0" marginheight="0" vspace="0" hspace="0" allowtransparency="true" scrolling="no" allow="attribution-reporting; run-ad-auction" src="https://googleads.g.doubleclick.net/pagead/html/r20250903/r20190131/zrt_lookup_fy2021.html#RS-0-&amp;adk=1812271808&amp;client=ca-pub-6274372985288030&amp;fa=8&amp;ifi=4&amp;uci=a!4" data-google-container-id="a!4" tabindex="0" title="Advertisement" aria-label="Advertisement" data-google-query-id="COuf792qwo8DFdW0jggddsAVAQ" data-load-complete="true"></iframe></div></ins></html>

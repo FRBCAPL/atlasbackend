@@ -49,16 +49,22 @@ const ladderMatchSchema = new mongoose.Schema({
   winner: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'LadderPlayer',
-    required: true
+    required: function() {
+      return this.status === 'completed';
+    }
   },
   loser: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'LadderPlayer',
-    required: true
+    required: function() {
+      return this.status === 'completed';
+    }
   },
   score: {
     type: String,
-    required: true
+    required: function() {
+      return this.status === 'completed';
+    }
   },
   
   // Position changes
@@ -98,7 +104,9 @@ const ladderMatchSchema = new mongoose.Schema({
   },
   completedDate: {
     type: Date,
-    required: true
+    required: function() {
+      return this.status === 'completed';
+    }
   },
   venue: {
     type: String,
@@ -116,7 +124,9 @@ const ladderMatchSchema = new mongoose.Schema({
   reportedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'LadderPlayer',
-    required: true
+    required: function() {
+      return this.status === 'completed';
+    }
   },
   reportedAt: {
     type: Date,
@@ -164,7 +174,10 @@ const ladderMatchSchema = new mongoose.Schema({
   // Prize information
   prizeAmount: {
     type: Number,
-    required: true
+    required: function() {
+      return this.status === 'completed';
+    },
+    default: 0
   },
   sponsorPrizes: [{
     description: String,
@@ -197,10 +210,10 @@ ladderMatchSchema.virtual('duration').get(function() {
 ladderMatchSchema.statics.getMatchesForPlayer = function(playerId, limit = 10) {
   return this.find({
     $or: [{ player1: playerId }, { player2: playerId }],
-    status: 'completed'
+    status: 'completed' // Only show completed matches
   })
   .populate('player1 player2 winner loser', 'firstName lastName email ladderName position')
-  .sort({ completedDate: -1 })
+  .sort({ completedDate: -1 }) // Sort by completed date
   .limit(limit);
 };
 

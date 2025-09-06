@@ -5,6 +5,8 @@ import LadderPlayer from '../models/LadderPlayer.js';
 import LadderMatch from '../models/LadderMatch.js';
 import PaymentConfig from '../models/PaymentConfig.js';
 import PendingClaim from '../models/PendingClaim.js';
+import UserCredits from '../models/UserCredits.js';
+import PaymentRecord from '../models/PaymentRecord.js';
 import { 
   createSquarePayment, 
   createSquareCustomer, 
@@ -612,10 +614,10 @@ router.post('/verify-payment', async (req, res) => {
 });
 
 /**
- * Record manual payment
- * POST /api/monetization/record-payment
+ * Record manual payment (legacy)
+ * POST /api/monetization/record-manual-payment
  */
-router.post('/record-payment', async (req, res) => {
+router.post('/record-manual-payment', async (req, res) => {
   try {
     const { 
       type, 
@@ -1510,6 +1512,392 @@ router.post('/check-payment-status', async (req, res) => {
     res.status(500).json({
       error: 'Failed to check payment status',
       message: 'Please try again or contact support'
+    });
+  }
+});
+
+// ============================================================================
+// HYBRID PAYMENT VERIFICATION SYSTEM
+// ============================================================================
+
+/**
+ * Get user payment data (history, credits, trust level)
+ * GET /api/monetization/user-payment-data/:email
+ */
+router.get('/user-payment-data/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    // Get user credits
+    let userCredits = await UserCredits.findOne({ playerEmail: email });
+    if (!userCredits) {
+      userCredits = new UserCredits({
+        playerEmail: email,
+        balance: 0,
+        totalPurchased: 0,
+        totalUsed: 0
+      });
+      await userCredits.save();
+    }
+    
+    // Get payment history
+    const paymentHistory = await PaymentRecord.find({ 
+      playerEmail: email,
+      status: 'completed'
+    }).sort({ createdAt: -1 }).limit(50);
+    
+    // Calculate trust level
+    const totalPayments = paymentHistory.length;
+    const failedPayments = await PaymentRecord.countDocuments({ 
+      playerEmail: email,
+      status: 'failed'
+    });
+    const successRate = totalPayments > 0 ? (totalPayments - failedPayments) / totalPayments : 0;
+    
+    let trustLevel = 'new';
+    if (totalPayments >= 10 && successRate >= 0.95) {
+      trustLevel = 'trusted';
+    } else if (totalPayments >= 3 && successRate >= 0.8) {
+      trustLevel = 'verified';
+    }
+    
+    res.json({
+      success: true,
+      credits: userCredits.balance,
+      paymentHistory: {
+        totalPayments,
+        failedPayments,
+        successRate,
+        trustLevel,
+        recentPayments: paymentHistory.slice(0, 10)
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error getting user payment data:', error);
+    res.status(500).json({
+      error: 'Failed to get user payment data',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Use credits for payment
+ * POST /api/monetization/use-credits
+ */
+router.post('/use-credits', async (req, res) => {
+  try {
+    const { playerEmail, amount, description } = req.body;
+    
+    if (!playerEmail || !amount) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Player email and amount are required'
+      });
+    }
+    
+    // Get user credits
+    let userCredits = await UserCredits.findOne({ playerEmail });
+    if (!userCredits) {
+      return res.status(400).json({
+        error: 'Insufficient credits',
+        message: 'No credits available for this user'
+      });
+    }
+    
+    if (userCredits.balance < amount) {
+      return res.status(400).json({
+        error: 'Insufficient credits',
+        message: `You have $${userCredits.balance.toFixed(2)} credits, but need $${amount.toFixed(2)}`
+      });
+    }
+    
+    // Deduct credits
+    userCredits.balance -= amount;
+    userCredits.totalUsed += amount;
+    await userCredits.save();
+    
+    // Record the credit usage as a payment
+    const paymentRecord = new PaymentRecord({
+      playerEmail,
+      amount,
+      paymentMethod: 'credits',
+      description,
+      type: 'match_fee',
+      status: 'completed',
+      verifiedBy: 'system',
+      verificationNotes: 'Paid with credits - no verification needed'
+    });
+    await paymentRecord.save();
+    
+    res.json({
+      success: true,
+      message: 'Credits used successfully',
+      remainingCredits: userCredits.balance
+    });
+    
+  } catch (error) {
+    console.error('Error using credits:', error);
+    res.status(500).json({
+      error: 'Failed to use credits',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Record payment with verification requirement (main endpoint)
+ * POST /api/monetization/record-payment
+ */
+router.post('/record-payment', async (req, res) => {
+  try {
+    const { 
+      playerEmail, 
+      amount, 
+      paymentMethod, 
+      description, 
+      type, 
+      requiresVerification = false,
+      matchId,
+      notes
+    } = req.body;
+    
+    if (!playerEmail || !amount || !paymentMethod) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Player email, amount, and payment method are required'
+      });
+    }
+    
+    // Determine if verification is required
+    const paymentHistory = await PaymentRecord.find({ 
+      playerEmail,
+      status: 'completed'
+    });
+    
+    const totalPayments = paymentHistory.length;
+    const failedPayments = await PaymentRecord.countDocuments({ 
+      playerEmail,
+      status: 'failed'
+    });
+    const successRate = totalPayments > 0 ? (totalPayments - failedPayments) / totalPayments : 0;
+    
+    let trustLevel = 'new';
+    if (totalPayments >= 10 && successRate >= 0.95) {
+      trustLevel = 'trusted';
+    } else if (totalPayments >= 3 && successRate >= 0.8) {
+      trustLevel = 'verified';
+    }
+    
+    const needsVerification = requiresVerification || trustLevel === 'new';
+    
+    // Create payment record
+    const paymentRecord = new PaymentRecord({
+      playerEmail,
+      amount,
+      paymentMethod,
+      description,
+      type,
+      status: needsVerification ? 'pending_verification' : 'completed',
+      requiresVerification: needsVerification,
+      verifiedBy: needsVerification ? null : 'system',
+      verificationNotes: needsVerification ? 'Pending admin verification' : 'Auto-approved for trusted user',
+      matchId,
+      notes
+    });
+    
+    await paymentRecord.save();
+    
+    // If it's a membership payment and doesn't need verification, create/update membership
+    if (type === 'membership' && !needsVerification) {
+      let membership = await Membership.findOne({ playerId: playerEmail });
+      
+      if (!membership) {
+        membership = new Membership({
+          playerId: playerEmail,
+          tier: 'standard',
+          status: 'active',
+          amount: amount,
+          startDate: new Date(),
+          paymentMethod: paymentMethod
+        });
+      } else {
+        membership.status = 'active';
+        membership.lastPaymentDate = new Date();
+        membership.paymentMethod = paymentMethod;
+      }
+      
+      await membership.save();
+    }
+    
+    res.json({
+      success: true,
+      message: needsVerification ? 'Payment recorded - pending admin verification' : 'Payment recorded successfully',
+      paymentId: paymentRecord._id,
+      requiresVerification: needsVerification,
+      trustLevel
+    });
+    
+  } catch (error) {
+    console.error('Error recording payment:', error);
+    res.status(500).json({
+      error: 'Failed to record payment',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Purchase credits
+ * POST /api/monetization/purchase-credits
+ */
+router.post('/purchase-credits', async (req, res) => {
+  try {
+    const { playerEmail, amount, paymentMethod, paymentData } = req.body;
+    
+    if (!playerEmail || !amount || !paymentMethod) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Player email, amount, and payment method are required'
+      });
+    }
+    
+    // For now, we'll simulate the payment and add credits
+    // In a real implementation, you'd integrate with payment processors here
+    
+    let userCredits = await UserCredits.findOne({ playerEmail });
+    if (!userCredits) {
+      userCredits = new UserCredits({
+        playerEmail,
+        balance: 0,
+        totalPurchased: 0,
+        totalUsed: 0
+      });
+    }
+    
+    // Add credits
+    userCredits.balance += amount;
+    userCredits.totalPurchased += amount;
+    await userCredits.save();
+    
+    // Record the purchase
+    const paymentRecord = new PaymentRecord({
+      playerEmail,
+      amount,
+      paymentMethod,
+      description: `Credits purchase - $${amount}`,
+      type: 'credits_purchase',
+      status: 'completed',
+      verifiedBy: 'system',
+      verificationNotes: 'Credits purchase - no verification needed'
+    });
+    await paymentRecord.save();
+    
+    res.json({
+      success: true,
+      message: 'Credits purchased successfully',
+      newBalance: userCredits.balance
+    });
+    
+  } catch (error) {
+    console.error('Error purchasing credits:', error);
+    res.status(500).json({
+      error: 'Failed to purchase credits',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Admin: Verify pending payments
+ * POST /api/monetization/verify-payment/:paymentId
+ */
+router.post('/verify-payment/:paymentId', async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const { verified, adminNotes } = req.body;
+    
+    const paymentRecord = await PaymentRecord.findById(paymentId);
+    if (!paymentRecord) {
+      return res.status(404).json({
+        error: 'Payment not found',
+        message: 'Payment record does not exist'
+      });
+    }
+    
+    if (paymentRecord.status !== 'pending_verification') {
+      return res.status(400).json({
+        error: 'Invalid payment status',
+        message: 'Payment is not pending verification'
+      });
+    }
+    
+    // Update payment status
+    paymentRecord.status = verified ? 'completed' : 'failed';
+    paymentRecord.verifiedBy = 'admin';
+    paymentRecord.verificationNotes = adminNotes || (verified ? 'Verified by admin' : 'Rejected by admin');
+    paymentRecord.verifiedAt = new Date();
+    
+    await paymentRecord.save();
+    
+    // If it's a membership payment and was verified, create/update membership
+    if (paymentRecord.type === 'membership' && verified) {
+      let membership = await Membership.findOne({ playerId: paymentRecord.playerEmail });
+      
+      if (!membership) {
+        membership = new Membership({
+          playerId: paymentRecord.playerEmail,
+          tier: 'standard',
+          status: 'active',
+          amount: paymentRecord.amount,
+          startDate: new Date(),
+          paymentMethod: paymentRecord.paymentMethod
+        });
+      } else {
+        membership.status = 'active';
+        membership.lastPaymentDate = new Date();
+        membership.paymentMethod = paymentRecord.paymentMethod;
+      }
+      
+      await membership.save();
+    }
+    
+    res.json({
+      success: true,
+      message: verified ? 'Payment verified successfully' : 'Payment rejected',
+      payment: paymentRecord
+    });
+    
+  } catch (error) {
+    console.error('Error verifying payment:', error);
+    res.status(500).json({
+      error: 'Failed to verify payment',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Admin: Get pending payments for verification
+ * GET /api/monetization/pending-payments
+ */
+router.get('/pending-payments', async (req, res) => {
+  try {
+    const pendingPayments = await PaymentRecord.find({ 
+      status: 'pending_verification' 
+    }).sort({ createdAt: -1 });
+    
+    res.json({
+      success: true,
+      pendingPayments
+    });
+    
+  } catch (error) {
+    console.error('Error getting pending payments:', error);
+    res.status(500).json({
+      error: 'Failed to get pending payments',
+      message: error.message
     });
   }
 });

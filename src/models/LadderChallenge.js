@@ -28,6 +28,12 @@ const ladderChallengeSchema = new mongoose.Schema({
     default: 'pending'
   },
   
+  // Admin-created flag
+  isAdminCreated: {
+    type: Boolean,
+    default: false
+  },
+  
   // Match details (to be agreed upon)
   matchDetails: {
     entryFee: {

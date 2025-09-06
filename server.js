@@ -7,6 +7,8 @@ import cron from 'node-cron';
 import { exec } from 'child_process';
 import { deleteExpiredMatchChannels } from './src/cleanupChannels.js';
 import { createMatchEvent } from './src/googleCalendar.js';
+import fargoUpdateService from './src/services/fargoUpdateService.js';
+import fargoScraperService from './src/services/fargoScraperService.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import helmet from 'helmet';
@@ -971,6 +973,58 @@ async function startServer() {
     deleteExpiredMatchChannels()
       .then(() => console.log('Expired channels cleaned up!'))
       .catch(err => console.error('Cleanup failed:', err));
+  });
+
+  // Gradual Fargo rating updates - runs every 6 hours
+  cron.schedule('0 */6 * * *', async () => {
+    try {
+      console.log('🔄 Starting gradual Fargo rating update...');
+      
+      // Get the next player index to update
+      const playerIndex = await fargoScraperService.getNextPlayerIndex('499-under');
+      
+      // Update a single player
+      try {
+        const result = await fargoScraperService.updateSinglePlayer('499-under', playerIndex);
+        
+        if (result.success) {
+          console.log(`✅ Updated player: ${result.player}`);
+          if (result.oldRating !== result.newRating) {
+            console.log(`   Rating changed: ${result.oldRating} → ${result.newRating}`);
+          } else {
+            console.log(`   No rating change (${result.oldRating})`);
+          }
+          
+          // Save the next index for the next run
+          await fargoScraperService.savePlayerIndex('499-under', result.nextIndex);
+          
+          fargoUpdateService.log(`Gradual update: ${result.player} - ${result.oldRating} → ${result.newRating}`);
+        } else {
+          console.log(`⚠️ Failed to update player: ${result.reason}`);
+          fargoUpdateService.log(`Gradual update failed: ${result.reason}`, 'WARN');
+        }
+        
+      } catch (scraperError) {
+        console.log('⚠️ Gradual update failed:', scraperError.message);
+        fargoUpdateService.log(`Gradual update error: ${scraperError.message}`, 'ERROR');
+      }
+      
+      console.log('✅ Gradual Fargo rating update completed');
+    } catch (error) {
+      console.error('❌ Gradual Fargo rating update failed:', error);
+      fargoUpdateService.log(`Gradual update failed: ${error.message}`, 'ERROR');
+    }
+  });
+
+  // Backup reminder - runs daily at 2 AM
+  cron.schedule('0 2 * * *', async () => {
+    try {
+      console.log('💾 Creating daily Fargo rating backup...');
+      await fargoUpdateService.createBackup('499-under');
+      console.log('✅ Daily backup completed');
+    } catch (error) {
+      console.error('❌ Daily backup failed:', error);
+    }
   });
 
   // Add database usage logging on startup

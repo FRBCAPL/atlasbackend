@@ -1,0 +1,272 @@
+[
+  {
+    "position": 1,
+    "name": "Brett Gonzalez",
+    "fargoRate": 471
+  },
+  {
+    "position": 2,
+    "name": "Tito Rodriguez",
+    "fargoRate": 463
+  },
+  {
+    "position": 3,
+    "name": "Lawrence Anaya",
+    "fargoRate": 455
+  },
+  {
+    "position": 4,
+    "name": "Ramsey Knowles",
+    "fargoRate": 470
+  },
+  {
+    "position": 5,
+    "name": "Tom Barnard",
+    "fargoRate": 488
+  },
+  {
+    "position": 6,
+    "name": "Chris Roberts",
+    "fargoRate": 472
+  },
+  {
+    "position": 7,
+    "name": "David Delgado",
+    "fargoRate": 373
+  },
+  {
+    "position": 8,
+    "name": "Cody Kinney",
+    "fargoRate": 443
+  },
+  {
+    "position": 9,
+    "name": "Crystal Pettiford",
+    "fargoRate": 319
+  },
+  {
+    "position": 10,
+    "name": "Louis Martinez",
+    "fargoRate": 365
+  },
+  {
+    "position": 11,
+    "name": "Tony Neumann",
+    "fargoRate": 0
+  },
+  {
+    "position": 12,
+    "name": "Christopher Anderson",
+    "fargoRate": 427
+  },
+  {
+    "position": 13,
+    "name": "Kent Montel",
+    "fargoRate": 467
+  },
+  {
+    "position": 14,
+    "name": "Ramon Valdez",
+    "fargoRate": 464
+  },
+  {
+    "position": 15,
+    "name": "Darren Maya",
+    "fargoRate": 352
+  },
+  {
+    "position": 16,
+    "name": "Lyndl Navarrete",
+    "fargoRate": 421
+  },
+  {
+    "position": 17,
+    "name": "Johnny Grimaldo",
+    "fargoRate": 460
+  },
+  {
+    "position": 18,
+    "name": "Joe Eusoof",
+    "fargoRate": 482
+  },
+  {
+    "position": 19,
+    "name": "Erlon Calderon",
+    "fargoRate": 458
+  },
+  {
+    "position": 20,
+    "name": "Ethienne Rodriguez",
+    "fargoRate": 333
+  },
+  {
+    "position": 21,
+    "name": "George S. Gutierrez",
+    "fargoRate": 421
+  },
+  {
+    "position": 22,
+    "name": "Ben Mullenaux",
+    "fargoRate": 455
+  },
+  {
+    "position": 23,
+    "name": "Zach Hamning",
+    "fargoRate": 0
+  },
+  {
+    "position": 24,
+    "name": "Micheal Queen",
+    "fargoRate": 354
+  },
+  {
+    "position": 25,
+    "name": "Victor Burgos",
+    "fargoRate": 395
+  },
+  {
+    "position": 26,
+    "name": "Sam Merritt",
+    "fargoRate": 393
+  },
+  {
+    "position": 27,
+    "name": "Rob Weaver",
+    "fargoRate": 396
+  },
+  {
+    "position": 28,
+    "name": "Jeremy Watt",
+    "fargoRate": 453
+  },
+  {
+    "position": 29,
+    "name": "Rick Romero",
+    "fargoRate": 400
+  },
+  {
+    "position": 30,
+    "name": "Kent Peterson",
+    "fargoRate": 403
+  },
+  {
+    "position": 31,
+    "name": "Christopher Sisneros",
+    "fargoRate": 340
+  },
+  {
+    "position": 32,
+    "name": "Gary Cogzell",
+    "fargoRate": 475
+  },
+  {
+    "position": 33,
+    "name": "John Witherbee",
+    "fargoRate": 443
+  },
+  {
+    "position": 34,
+    "name": "Vince Arellano",
+    "fargoRate": 452
+  },
+  {
+    "position": 35,
+    "name": "Dave Shelton",
+    "fargoRate": 440
+  },
+  {
+    "position": 36,
+    "name": "Jo Graclik",
+    "fargoRate": 400
+  },
+  {
+    "position": 37,
+    "name": "Valeria Mendoza Poncedeleon",
+    "fargoRate": 432
+  },
+  {
+    "position": 38,
+    "name": "Jordan Tiona",
+    "fargoRate": 255
+  },
+  {
+    "position": 39,
+    "name": "Mario Zimmerman",
+    "fargoRate": 386
+  },
+  {
+    "position": 40,
+    "name": "Lorenzo Avila",
+    "fargoRate": 485
+  },
+  {
+    "position": 41,
+    "name": "Melissa Swatek",
+    "fargoRate": 294
+  },
+  {
+    "position": 42,
+    "name": "Raymond Carlson",
+    "fargoRate": 0
+  },
+  {
+    "position": 43,
+    "name": "Christopher Edl",
+    "fargoRate": 435
+  },
+  {
+    "position": 44,
+    "name": "Jacob Poland",
+    "fargoRate": 0
+  },
+  {
+    "position": 45,
+    "name": "James Duckworth",
+    "fargoRate": 486
+  },
+  {
+    "position": 46,
+    "name": "Kevin Santiesteban",
+    "fargoRate": 476
+  },
+  {
+    "position": 47,
+    "name": "Red McKay",
+    "fargoRate": 0
+  },
+  {
+    "position": 48,
+    "name": "Nicholas Windsor",
+    "fargoRate": 314
+  },
+  {
+    "position": 49,
+    "name": "Matt Hammer",
+    "fargoRate": 391
+  },
+  {
+    "position": 50,
+    "name": "Alex Esquibal",
+    "fargoRate": 491
+  },
+  {
+    "position": 51,
+    "name": "TestChallenger Alpha",
+    "fargoRate": 450
+  },
+  {
+    "position": 52,
+    "name": "TestDefender Beta",
+    "fargoRate": 430
+  },
+  {
+    "position": 53,
+    "name": "TestChallenger Alpha",
+    "fargoRate": 450
+  },
+  {
+    "position": 54,
+    "name": "TestDefender Beta",
+    "fargoRate": 430
+  }
+]

@@ -8,6 +8,7 @@ import User from '../models/User.js'; // Added import for User
 import UnifiedUser from '../models/UnifiedUser.js'; // Added import for UnifiedUser
 import bcrypt from 'bcryptjs'; // Added import for bcrypt
 import PlayerRecognitionService from '../services/PlayerRecognitionService.js';
+import { publicLadderEmbedHeaders } from '../middleware/iframeMiddleware.js';
 // Note: EmailJS is client-side only, so we'll handle email sending in the frontend
 // For now, we'll just return the credentials and let the frontend handle the email
 
@@ -1358,6 +1359,110 @@ router.post('/:leagueId/ladders/:ladderId/matches', async (req, res) => {
   }
 });
 
+// Update match result (Admin only)
+router.put('/:leagueId/ladders/:ladderId/matches/:matchId', async (req, res) => {
+  try {
+    const { leagueId, ladderId, matchId } = req.params;
+    const { winner, score, notes, completedDate, reportedBy } = req.body;
+
+    // Validate required fields
+    if (!winner || !score) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: winner, score'
+      });
+    }
+
+    // Find the match
+    const match = await LadderMatch.findById(matchId)
+      .populate('player1 player2', 'firstName lastName position ladderName');
+
+    if (!match) {
+      return res.status(404).json({
+        success: false,
+        message: 'Match not found'
+      });
+    }
+
+    // Validate match is on the correct ladder
+    if (match.player1Ladder !== ladderId && match.player2Ladder !== ladderId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Match is not on the specified ladder'
+      });
+    }
+
+    // Get winner and loser
+    const winnerPlayer = match.player1._id.toString() === winner ? match.player1 : match.player2;
+    const loserPlayer = match.player1._id.toString() === winner ? match.player2 : match.player1;
+
+    // Update match with results
+    match.winner = winner;
+    match.loser = loserPlayer._id;
+    match.score = score;
+    match.notes = notes || match.notes;
+    match.completedDate = completedDate ? new Date(completedDate) : new Date();
+    match.status = 'completed';
+    match.reportedBy = reportedBy || winner; // Use reportedBy if provided, otherwise use winner
+    match.reportedAt = new Date();
+
+    // Calculate new positions (simple swap if winner was lower ranked)
+    if (winnerPlayer.position > loserPlayer.position) {
+      // Winner was lower ranked, so they move up
+      match.player1NewPosition = winnerPlayer._id.toString() === match.player1._id.toString() 
+        ? loserPlayer.position 
+        : match.player1NewPosition;
+      match.player2NewPosition = winnerPlayer._id.toString() === match.player2._id.toString() 
+        ? loserPlayer.position 
+        : match.player2NewPosition;
+    }
+
+    await match.save();
+
+    // Update player positions and stats
+    if (winnerPlayer.position > loserPlayer.position) {
+      // Swap positions
+      winnerPlayer.position = loserPlayer.position;
+      loserPlayer.position = match.player1OldPosition === winnerPlayer.position 
+        ? match.player2OldPosition 
+        : match.player1OldPosition;
+      
+      await winnerPlayer.save();
+      await loserPlayer.save();
+    }
+
+    // Update player stats
+    winnerPlayer.wins = (winnerPlayer.wins || 0) + 1;
+    winnerPlayer.totalMatches = (winnerPlayer.totalMatches || 0) + 1;
+    loserPlayer.losses = (loserPlayer.losses || 0) + 1;
+    loserPlayer.totalMatches = (loserPlayer.totalMatches || 0) + 1;
+
+    await winnerPlayer.save();
+    await loserPlayer.save();
+
+    res.json({
+      success: true,
+      message: 'Match result updated successfully',
+      match: {
+        id: match._id,
+        winner: `${winnerPlayer.firstName} ${winnerPlayer.lastName}`,
+        loser: `${loserPlayer.firstName} ${loserPlayer.lastName}`,
+        score: score,
+        completedDate: match.completedDate,
+        status: 'completed'
+      }
+    });
+
+  } catch (error) {
+    console.error('Error updating match result:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update match result',
+      error: error.message
+    });
+  }
+});
+
 // Apply for existing ladder player account (for players without email/PIN)
 router.post('/apply-for-existing-ladder-account', async (req, res) => {
   try {
@@ -1868,6 +1973,57 @@ router.get('/prize-pool/:ladderName/winners', async (req, res) => {
   } catch (error) {
     console.error('Error fetching winners:', error);
     res.status(500).json({ error: 'Failed to fetch winners data' });
+  }
+});
+
+// Public ladder embed route - allows iframe embedding
+router.get('/embed/:ladderName?', publicLadderEmbedHeaders, async (req, res) => {
+  try {
+    const { ladderName = '499-under' } = req.params;
+    
+    // Validate ladder name
+    const validLadders = ['499-under', '500-549', '550-plus'];
+    if (!validLadders.includes(ladderName)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid ladder name. Valid options: 499-under, 500-549, 550-plus'
+      });
+    }
+
+    // Get players for the specified ladder
+    const players = await LadderPlayer.find({ 
+      ladderName: ladderName,
+      isActive: true 
+    })
+    .sort({ position: 1 })
+    .select('firstName lastName position fargoRate wins losses isActive immunityUntil')
+    .lean();
+
+    // Return public ladder data (no sensitive information)
+    res.json({
+      success: true,
+      ladderName: ladderName,
+      players: players.map(player => ({
+        _id: player._id,
+        firstName: player.firstName,
+        lastName: player.lastName,
+        position: player.position,
+        fargoRate: player.fargoRate,
+        wins: player.wins || 0,
+        losses: player.losses || 0,
+        isActive: player.isActive,
+        immunityUntil: player.immunityUntil
+      })),
+      lastUpdated: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error fetching public ladder data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch ladder data',
+      error: error.message
+    });
   }
 });
 

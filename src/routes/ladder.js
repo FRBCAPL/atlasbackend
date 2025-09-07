@@ -8,6 +8,14 @@ import User from '../models/User.js'; // Added import for User
 import UnifiedUser from '../models/UnifiedUser.js'; // Added import for UnifiedUser
 import bcrypt from 'bcryptjs'; // Added import for bcrypt
 import PlayerRecognitionService from '../services/PlayerRecognitionService.js';
+
+// Helper function to get maximum position for a ladder
+const getMaxPosition = async (ladderId) => {
+  const maxPlayer = await LadderPlayer.findOne({ ladderName: ladderId })
+    .sort({ position: -1 })
+    .limit(1);
+  return maxPlayer ? maxPlayer.position : 1;
+};
 import { publicLadderEmbedHeaders } from '../middleware/iframeMiddleware.js';
 // Note: EmailJS is client-side only, so we'll handle email sending in the frontend
 // For now, we'll just return the credentials and let the frontend handle the email
@@ -1500,30 +1508,72 @@ router.put('/:leagueId/ladders/:ladderId/matches/:matchId', async (req, res) => 
     match.reportedBy = reportedBy || winner; // Use reportedBy if provided, otherwise use winner
     match.reportedAt = new Date();
 
-    // Calculate new positions (simple swap if winner was lower ranked)
-    if (winnerPlayer.position > loserPlayer.position) {
-      // Winner was lower ranked, so they move up
-      match.player1NewPosition = winnerPlayer._id.toString() === match.player1._id.toString() 
-        ? loserPlayer.position 
-        : match.player1NewPosition;
-      match.player2NewPosition = winnerPlayer._id.toString() === match.player2._id.toString() 
-        ? loserPlayer.position 
-        : match.player2NewPosition;
+    // Calculate new positions based on match type
+    let newWinnerPosition, newLoserPosition;
+    
+    if (match.matchType === 'smackdown') {
+      // SmackDown rules: If challenger wins, defender moves 3 spots down, challenger moves 2 spots up
+      // If defender wins, they switch positions
+      const isChallengerWinner = winnerPlayer._id.toString() === match.player1._id.toString();
+      
+      if (isChallengerWinner) {
+        // Challenger won: defender moves 3 down, challenger moves 2 up
+        newLoserPosition = Math.min(loserPlayer.position + 3, await getMaxPosition(ladderId));
+        newWinnerPosition = Math.max(winnerPlayer.position - 2, 1);
+      } else {
+        // Defender won: simple position swap
+        newWinnerPosition = loserPlayer.position;
+        newLoserPosition = winnerPlayer.position;
+      }
+    } else if (match.matchType === 'smackback') {
+      // SmackBack rules: If challenger wins, they get 1st place, all others move down one
+      // If 1st place player wins, positions remain unchanged
+      if (winnerPlayer._id.toString() === match.player1._id.toString()) {
+        // Challenger won: they get 1st place, everyone else moves down one
+        newWinnerPosition = 1;
+        newLoserPosition = loserPlayer.position + 1;
+        
+        // Move all other players down one position
+        await LadderPlayer.updateMany(
+          { 
+            ladderName: ladderId, 
+            position: { $lt: winnerPlayer.position },
+            _id: { $nin: [winnerPlayer._id, loserPlayer._id] }
+          },
+          { $inc: { position: 1 } }
+        );
+      } else {
+        // 1st place player won: positions remain unchanged
+        newWinnerPosition = winnerPlayer.position;
+        newLoserPosition = loserPlayer.position;
+      }
+    } else {
+      // Standard challenge: simple swap if winner was lower ranked
+      if (winnerPlayer.position > loserPlayer.position) {
+        newWinnerPosition = loserPlayer.position;
+        newLoserPosition = winnerPlayer.position;
+      } else {
+        newWinnerPosition = winnerPlayer.position;
+        newLoserPosition = loserPlayer.position;
+      }
     }
+
+    // Update match position changes
+    match.player1NewPosition = winnerPlayer._id.toString() === match.player1._id.toString() 
+      ? newWinnerPosition 
+      : newLoserPosition;
+    match.player2NewPosition = winnerPlayer._id.toString() === match.player2._id.toString() 
+      ? newWinnerPosition 
+      : newLoserPosition;
 
     await match.save();
 
-    // Update player positions and stats
-    if (winnerPlayer.position > loserPlayer.position) {
-      // Swap positions
-      winnerPlayer.position = loserPlayer.position;
-      loserPlayer.position = match.player1OldPosition === winnerPlayer.position 
-        ? match.player2OldPosition 
-        : match.player1OldPosition;
-      
-      await winnerPlayer.save();
-      await loserPlayer.save();
-    }
+    // Update player positions
+    winnerPlayer.position = newWinnerPosition;
+    loserPlayer.position = newLoserPosition;
+    
+    await winnerPlayer.save();
+    await loserPlayer.save();
 
     // Update player stats
     winnerPlayer.wins = (winnerPlayer.wins || 0) + 1;

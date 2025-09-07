@@ -761,7 +761,10 @@ router.get('/player/:email/matches', async (req, res) => {
         score: match.score || 'N/A',
         matchType: match.matchType,
         playerRole: isPlayer1 ? 'challenger' : 'defender',
-        matchDate: match.completedDate || match.scheduledDate
+        matchDate: match.completedDate || match.scheduledDate,
+        location: match.venue || null,
+        positionBefore: isPlayer1 ? match.player1OldPosition : match.player2OldPosition,
+        positionAfter: isPlayer1 ? match.player1NewPosition : match.player2NewPosition
       };
     });
     
@@ -804,7 +807,10 @@ router.get('/matches/last-match/:email', async (req, res) => {
       score: lastMatch.score || 'N/A',
       matchType: lastMatch.matchType,
       playerRole: isPlayer1 ? 'challenger' : 'defender',
-      matchDate: lastMatch.completedDate || lastMatch.scheduledDate
+      matchDate: lastMatch.completedDate || lastMatch.scheduledDate,
+      location: lastMatch.venue || null,
+      positionBefore: isPlayer1 ? lastMatch.player1OldPosition : lastMatch.player2OldPosition,
+      positionAfter: isPlayer1 ? lastMatch.player1NewPosition : lastMatch.player2NewPosition
     };
     
     res.json(transformedMatch);

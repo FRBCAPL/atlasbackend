@@ -163,17 +163,33 @@ router.get('/ladders/:ladderName/players', async (req, res) => {
     const players = await LadderPlayer.getPlayersByLadder(ladderName);
     console.log(`Found ${players.length} players for ladder ${ladderName}`);
     
-    // Enhance players with unified account status
+    // Enhance players with unified account status and calculate actual wins/losses
     const enhancedPlayers = await Promise.all(players.map(async (player) => {
       const unifiedStatus = await checkUnifiedAccountStatus(player.firstName, player.lastName);
       
+      // Calculate actual wins and losses from match history
+      const matches = await LadderMatch.getMatchesForPlayer(player._id, 1000); // Get all matches
+      let actualWins = 0;
+      let actualLosses = 0;
+      
+      matches.forEach(match => {
+        if (match.winner && match.winner._id.toString() === player._id.toString()) {
+          actualWins++;
+        } else if (match.winner && match.winner._id.toString() !== player._id.toString()) {
+          actualLosses++;
+        }
+      });
+      
       return {
         ...player.toObject(),
+        wins: actualWins,
+        losses: actualLosses,
+        totalMatches: matches.length,
         unifiedAccount: unifiedStatus
       };
     }));
     
-    console.log(`Enhanced ${enhancedPlayers.length} players with unified account status`);
+    console.log(`Enhanced ${enhancedPlayers.length} players with unified account status and calculated stats`);
     
     res.json(enhancedPlayers);
   } catch (error) {
@@ -192,11 +208,29 @@ router.get('/player/:email', async (req, res) => {
       return res.status(404).json({ error: 'Player not found' });
     }
     
+    // Calculate actual wins and losses from match history
+    const matches = await LadderMatch.getMatchesForPlayer(player._id, 1000); // Get all matches
+    let actualWins = 0;
+    let actualLosses = 0;
+    
+    matches.forEach(match => {
+      if (match.winner && match.winner._id.toString() === player._id.toString()) {
+        actualWins++;
+      } else if (match.winner && match.winner._id.toString() !== player._id.toString()) {
+        actualLosses++;
+      }
+    });
+    
+    console.log(`🔍 Player ${player.firstName} ${player.lastName}: ${actualWins} wins, ${actualLosses} losses (from ${matches.length} matches)`);
+    
     // Enhance player with unified account status
     const unifiedStatus = await checkUnifiedAccountStatus(player.firstName, player.lastName);
     
     const enhancedPlayer = {
       ...player.toObject(),
+      wins: actualWins,
+      losses: actualLosses,
+      totalMatches: matches.length,
       unifiedAccount: unifiedStatus
     };
     
@@ -714,7 +748,24 @@ router.get('/player/:email/matches', async (req, res) => {
     }
     
     const matches = await LadderMatch.getMatchesForPlayer(player._id, parseInt(limit));
-    res.json(matches);
+    
+    // Transform matches to match frontend expectations
+    const transformedMatches = matches.map(match => {
+      const isPlayer1 = match.player1._id.toString() === player._id.toString();
+      const opponent = isPlayer1 ? match.player2 : match.player1;
+      const isWinner = match.winner && match.winner._id.toString() === player._id.toString();
+      
+      return {
+        opponentName: `${opponent.firstName} ${opponent.lastName}`,
+        result: isWinner ? 'W' : 'L',
+        score: match.score || 'N/A',
+        matchType: match.matchType,
+        playerRole: isPlayer1 ? 'challenger' : 'defender',
+        matchDate: match.completedDate || match.scheduledDate
+      };
+    });
+    
+    res.json(transformedMatches);
   } catch (error) {
     console.error('Error fetching player matches:', error);
     res.status(500).json({ error: 'Failed to fetch player matches' });
@@ -742,7 +793,21 @@ router.get('/matches/last-match/:email', async (req, res) => {
       return res.json(null); // No matches found
     }
     
-    res.json(lastMatch);
+    // Transform the match data to match frontend expectations
+    const isPlayer1 = lastMatch.player1._id.toString() === player._id.toString();
+    const opponent = isPlayer1 ? lastMatch.player2 : lastMatch.player1;
+    const isWinner = lastMatch.winner && lastMatch.winner._id.toString() === player._id.toString();
+    
+    const transformedMatch = {
+      opponentName: `${opponent.firstName} ${opponent.lastName}`,
+      result: isWinner ? 'W' : 'L',
+      score: lastMatch.score || 'N/A',
+      matchType: lastMatch.matchType,
+      playerRole: isPlayer1 ? 'challenger' : 'defender',
+      matchDate: lastMatch.completedDate || lastMatch.scheduledDate
+    };
+    
+    res.json(transformedMatch);
   } catch (error) {
     console.error('Error fetching last match:', error);
     res.status(500).json({ error: 'Failed to fetch last match' });

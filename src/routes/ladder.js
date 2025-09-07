@@ -180,11 +180,34 @@ router.get('/ladders/:ladderName/players', async (req, res) => {
         }
       });
       
+      // Get the most recent match for last match details (using same logic as last-match endpoint)
+      let lastMatch = null;
+      const recentMatch = await LadderMatch.findOne({
+        $or: [{ player1: player._id }, { player2: player._id }],
+        status: 'completed' // Only show completed matches
+      })
+      .populate('player1 player2 winner loser', 'firstName lastName email ladderName position')
+      .sort({ completedDate: -1 });
+      
+      if (recentMatch) {
+        const isPlayer1 = recentMatch.player1._id.toString() === player._id.toString();
+        const opponent = isPlayer1 ? recentMatch.player2 : recentMatch.player1;
+        const isWinner = recentMatch.winner && recentMatch.winner._id.toString() === player._id.toString();
+        
+        lastMatch = {
+          result: isWinner ? 'W' : 'L',
+          opponent: `${opponent.firstName} ${opponent.lastName}`,
+          date: recentMatch.completedDate || recentMatch.createdAt,
+          venue: recentMatch.venue
+        };
+      }
+      
       return {
         ...player.toObject(),
         wins: actualWins,
         losses: actualLosses,
         totalMatches: matches.length,
+        lastMatch: lastMatch,
         unifiedAccount: unifiedStatus
       };
     }));

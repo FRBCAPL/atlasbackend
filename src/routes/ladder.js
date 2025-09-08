@@ -840,6 +840,7 @@ router.patch('/matches/:id/complete', async (req, res) => {
     const { winnerId, score, notes, venue, completedAt } = req.body;
     
     console.log('🔍 Completing match:', id, 'with winnerId:', winnerId);
+    console.log('🔍 Request body:', req.body);
     
     if (!winnerId || !score) {
       return res.status(400).json({ error: 'winnerId and score are required' });
@@ -847,22 +848,46 @@ router.patch('/matches/:id/complete', async (req, res) => {
     
     const match = await LadderMatch.findById(id);
     if (!match) {
+      console.log('❌ Match not found with ID:', id);
       return res.status(404).json({ error: 'Match not found' });
     }
+    
+    console.log('🔍 Found match:', {
+      id: match._id,
+      status: match.status,
+      player1: match.player1,
+      player2: match.player2,
+      player1OldPosition: match.player1OldPosition,
+      player2OldPosition: match.player2OldPosition
+    });
     
     if (match.status === 'completed') {
       return res.status(400).json({ error: 'Match is already completed' });
     }
     
     // Validate that winnerId is one of the players
-    const isPlayer1 = match.player1.toString() === winnerId.toString();
-    const isPlayer2 = match.player2.toString() === winnerId.toString();
+    const isPlayer1 = match.player1 && match.player1.toString() === winnerId.toString();
+    const isPlayer2 = match.player2 && match.player2.toString() === winnerId.toString();
+    
+    console.log('🔍 Player validation:', {
+      winnerId,
+      matchPlayer1: match.player1,
+      matchPlayer2: match.player2,
+      isPlayer1,
+      isPlayer2
+    });
     
     if (!isPlayer1 && !isPlayer2) {
       return res.status(400).json({ error: 'Winner must be one of the match players' });
     }
     
     // Complete the match
+    console.log('🔍 Calling match.complete()...');
+    
+    // Set the reportedBy field (required for completed matches)
+    match.reportedBy = winnerId; // The winner is reporting the match result
+    match.reportedAt = new Date();
+    
     await match.complete(winnerId, score, notes, venue, completedAt);
     
     console.log('✅ Match completed successfully:', id);
@@ -874,7 +899,8 @@ router.patch('/matches/:id/complete', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Error completing match:', error);
+    console.error('❌ Error completing match:', error);
+    console.error('❌ Error stack:', error.stack);
     res.status(500).json({ error: 'Failed to complete match', details: error.message });
   }
 });

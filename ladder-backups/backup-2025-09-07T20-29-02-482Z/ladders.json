@@ -1,0 +1,44 @@
+[
+  {
+    "_id": "68ad3d317367a8f33a23f4f8",
+    "name": "550-plus",
+    "displayName": "550+",
+    "minRating": 550,
+    "maxRating": 9999,
+    "minimumEntryFee": 50,
+    "minimumRace": 9,
+    "isActive": true,
+    "description": "For players with FargoRate of 550 and above",
+    "__v": 0,
+    "createdAt": "2025-08-26T04:50:57.579Z",
+    "updatedAt": "2025-08-26T04:50:57.579Z"
+  },
+  {
+    "_id": "68ad3d317367a8f33a23f4f6",
+    "name": "499-under",
+    "displayName": "499 & Under",
+    "minRating": 0,
+    "maxRating": 499,
+    "minimumEntryFee": 25,
+    "minimumRace": 7,
+    "isActive": true,
+    "description": "For players with FargoRate of 499 and under",
+    "__v": 0,
+    "createdAt": "2025-08-26T04:50:57.578Z",
+    "updatedAt": "2025-08-26T04:50:57.578Z"
+  },
+  {
+    "_id": "68ad3d317367a8f33a23f4f7",
+    "name": "500-549",
+    "displayName": "500-549",
+    "minRating": 500,
+    "maxRating": 549,
+    "minimumEntryFee": 50,
+    "minimumRace": 9,
+    "isActive": true,
+    "description": "For players with FargoRate between 500-549",
+    "__v": 0,
+    "createdAt": "2025-08-26T04:50:57.579Z",
+    "updatedAt": "2025-08-26T04:50:57.579Z"
+  }
+]

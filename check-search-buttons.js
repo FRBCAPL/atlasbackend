@@ -87,3 +87,4 @@ async function checkSearchButtons() {
 
 // Run the check
 checkSearchButtons().catch(console.error);
+

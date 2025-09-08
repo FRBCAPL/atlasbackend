@@ -74,3 +74,4 @@ async function debugDatabase() {
 
 // Run the debug
 debugDatabase().catch(console.error);
+

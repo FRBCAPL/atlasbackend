@@ -44,3 +44,4 @@ async function checkAllPlayers() {
 
 // Run the check
 checkAllPlayers().catch(console.error);
+

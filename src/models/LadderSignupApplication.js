@@ -71,6 +71,15 @@ const ladderSignupApplicationSchema = new mongoose.Schema({
     type: String,
     trim: true,
     default: ''
+  },
+  payNow: {
+    type: Boolean,
+    default: false
+  },
+  paymentMethod: {
+    type: String,
+    trim: true,
+    default: ''
   }
 }, {
   timestamps: true

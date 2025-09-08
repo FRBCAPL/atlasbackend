@@ -1,0 +1,971 @@
+[
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 7,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-08-31T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-05T18:05:12.731Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "isAdminCreated": false,
+    "_id": "68bb2658617eb37edcc83959",
+    "challengeType": "challenge",
+    "challenger": "68b24b1dec365cdb7b61de53",
+    "defender": "68b24b1dec365cdb7b61de4f",
+    "status": "accepted",
+    "deadline": "2025-09-12T18:05:12.726Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-05T18:05:12.731Z",
+    "updatedAt": "2025-09-05T18:05:12.736Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 7,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-08-31T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-05T18:08:11.743Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "isAdminCreated": false,
+    "_id": "68bb270b617eb37edcc8395e",
+    "challengeType": "challenge",
+    "challenger": "68b24b1dec365cdb7b61de53",
+    "defender": "68b24b1dec365cdb7b61de4f",
+    "status": "accepted",
+    "deadline": "2025-09-12T18:08:11.741Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-05T18:08:11.743Z",
+    "updatedAt": "2025-09-05T18:08:11.746Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 7,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-08-31T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-05T18:08:30.525Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "isAdminCreated": false,
+    "_id": "68bb271e5618007a549a42d9",
+    "challengeType": "challenge",
+    "challenger": "68b24b1dec365cdb7b61de53",
+    "defender": "68b24b1dec365cdb7b61de4f",
+    "status": "accepted",
+    "deadline": "2025-09-12T18:08:30.520Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-05T18:08:30.525Z",
+    "updatedAt": "2025-09-05T18:08:30.530Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 5,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-09-05T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-05T18:14:09.230Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "isAdminCreated": false,
+    "_id": "68bb28715618007a549a44b2",
+    "challengeType": "challenge",
+    "challenger": "68b24b1dec365cdb7b61de63",
+    "defender": "68b24b1dec365cdb7b61de57",
+    "status": "accepted",
+    "deadline": "2025-09-12T18:14:09.228Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-05T18:14:09.230Z",
+    "updatedAt": "2025-09-05T18:14:09.231Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 7,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-08-31T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-06T00:24:12.407Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "_id": "68bb7f2c3287e6438d3e54f3",
+    "challengeType": "challenge",
+    "challenger": "68b24b1dec365cdb7b61de53",
+    "defender": "68b24b1dec365cdb7b61de4f",
+    "status": "accepted",
+    "isAdminCreated": true,
+    "deadline": "2025-09-13T00:24:12.405Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-06T00:24:12.407Z",
+    "updatedAt": "2025-09-06T00:24:12.409Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 5,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-09-06T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-06T11:26:38.219Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "_id": "68bc1a6e9b36c804a4bd01df",
+    "challengeType": "challenge",
+    "challenger": "68b7734288d66cd1f48490db",
+    "defender": "68b69a8088d66cd1f484890b",
+    "status": "accepted",
+    "isAdminCreated": true,
+    "deadline": "2025-09-13T11:26:38.216Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-06T11:26:38.219Z",
+    "updatedAt": "2025-09-06T11:26:38.221Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 5,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-09-06T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-06T11:42:10.173Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "_id": "68bc1e12a05d748fd15c6d3e",
+    "challengeType": "challenge",
+    "challenger": "68b7734488d66cd1f48490e2",
+    "defender": "68b69a7e88d66cd1f4848904",
+    "status": "accepted",
+    "isAdminCreated": true,
+    "deadline": "2025-09-13T11:42:10.171Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-06T11:42:10.173Z",
+    "updatedAt": "2025-09-06T11:42:10.174Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 5,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-09-07T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-07T03:20:09.216Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "_id": "68bcf9e9f82e0134f1568769",
+    "challengeType": "challenge",
+    "challenger": "68b69a7e88d66cd1f4848904",
+    "defender": "68b69a8088d66cd1f484890b",
+    "status": "accepted",
+    "isAdminCreated": true,
+    "deadline": "2025-09-14T03:20:09.214Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-07T03:20:09.216Z",
+    "updatedAt": "2025-09-07T03:20:09.218Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 5,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-09-07T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-07T03:21:52.630Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "_id": "68bcfa50f82e0134f1568a21",
+    "challengeType": "challenge",
+    "challenger": "68b69a7e88d66cd1f4848904",
+    "defender": "68b7734488d66cd1f48490e2",
+    "status": "accepted",
+    "isAdminCreated": true,
+    "deadline": "2025-09-14T03:21:52.629Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-07T03:21:52.630Z",
+    "updatedAt": "2025-09-07T03:21:52.631Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 5,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-09-07T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-07T03:22:58.896Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "_id": "68bcfa92f82e0134f1568cbf",
+    "challengeType": "challenge",
+    "challenger": "68b7734488d66cd1f48490e2",
+    "defender": "68b69a7e88d66cd1f4848904",
+    "status": "accepted",
+    "isAdminCreated": true,
+    "deadline": "2025-09-14T03:22:58.895Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-07T03:22:58.896Z",
+    "updatedAt": "2025-09-07T03:22:58.897Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 5,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-09-07T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-07T10:03:13.302Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "_id": "68bd5861fe33fbaa917fa299",
+    "challengeType": "smackdown",
+    "challenger": "68b7734488d66cd1f48490e2",
+    "defender": "68b7734288d66cd1f48490db",
+    "status": "accepted",
+    "isAdminCreated": true,
+    "deadline": "2025-09-14T10:03:13.300Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-07T10:03:13.302Z",
+    "updatedAt": "2025-09-07T10:03:13.304Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 5,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-09-07T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-07T18:08:12.485Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "_id": "68bdca0c6152e83494329627",
+    "challengeType": "smackdown",
+    "challenger": "68b7734488d66cd1f48490e2",
+    "defender": "68b7734288d66cd1f48490db",
+    "status": "accepted",
+    "isAdminCreated": true,
+    "deadline": "2025-09-14T18:08:12.483Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-07T18:08:12.485Z",
+    "updatedAt": "2025-09-07T18:08:12.488Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 5,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-09-07T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-07T18:10:13.473Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "_id": "68bdca856152e83494329b08",
+    "challengeType": "smackdown",
+    "challenger": "68b7734488d66cd1f48490e2",
+    "defender": "68b7734288d66cd1f48490db",
+    "status": "accepted",
+    "isAdminCreated": true,
+    "deadline": "2025-09-14T18:10:13.473Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-07T18:10:13.474Z",
+    "updatedAt": "2025-09-07T18:10:13.474Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 5,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-09-07T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-07T18:12:25.670Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "_id": "68bdcb096152e8349432a817",
+    "challengeType": "smackback",
+    "challenger": "68b24b1fec365cdb7b61dead",
+    "defender": "68b24b1dec365cdb7b61de4f",
+    "status": "accepted",
+    "isAdminCreated": true,
+    "deadline": "2025-09-14T18:12:25.669Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-07T18:12:25.670Z",
+    "updatedAt": "2025-09-07T18:12:25.671Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 5,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-09-07T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-07T18:18:29.773Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "_id": "68bdcc756152e8349432ab16",
+    "challengeType": "smackdown",
+    "challenger": "68b7734288d66cd1f48490db",
+    "defender": "68b69a8088d66cd1f484890b",
+    "status": "accepted",
+    "isAdminCreated": true,
+    "deadline": "2025-09-14T18:18:29.773Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-07T18:18:29.773Z",
+    "updatedAt": "2025-09-07T18:18:29.774Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 5,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-09-07T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-07T18:22:48.016Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "_id": "68bdcd78550cd44eafc46b2c",
+    "challengeType": "smackback",
+    "challenger": "68b69a8088d66cd1f484890b",
+    "defender": "68b24b1dec365cdb7b61de4f",
+    "status": "accepted",
+    "isAdminCreated": true,
+    "deadline": "2025-09-14T18:22:48.009Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-07T18:22:48.016Z",
+    "updatedAt": "2025-09-07T18:22:48.020Z",
+    "__v": 0
+  },
+  {
+    "matchDetails": {
+      "entryFee": 0,
+      "raceLength": 5,
+      "gameType": "8-ball",
+      "tableSize": "7-foot",
+      "preferredDates": [
+        "2025-09-07T00:00:00.000Z"
+      ],
+      "agreedDate": null
+    },
+    "challengePost": {
+      "postContent": "Admin-created match",
+      "facebookPostId": null,
+      "postedAt": "2025-09-07T20:18:18.078Z"
+    },
+    "acceptance": {
+      "acceptedAt": null,
+      "acceptedBy": null,
+      "responseContent": null
+    },
+    "scheduling": {
+      "scheduledAt": null,
+      "scheduledBy": null,
+      "venue": "Legends Brews & Cues",
+      "address": "2790 Hancock Expwy, Colorado Springs"
+    },
+    "matchResult": {
+      "winner": null,
+      "loser": null,
+      "score": null,
+      "completedAt": null,
+      "reportedBy": null
+    },
+    "positionChanges": {
+      "challengerOldPosition": null,
+      "challengerNewPosition": null,
+      "defenderOldPosition": null,
+      "defenderNewPosition": null
+    },
+    "cancellation": {
+      "reason": null,
+      "cancelledBy": null,
+      "cancelledAt": null
+    },
+    "_id": "68bde88a13e67d37e4a5ebb4",
+    "challengeType": "challenge",
+    "challenger": "68bde840df03e9a1a3e0c124",
+    "defender": "68bde840df03e9a1a3e0c117",
+    "status": "accepted",
+    "isAdminCreated": true,
+    "deadline": "2025-09-14T20:18:18.073Z",
+    "adminNotes": null,
+    "createdAt": "2025-09-07T20:18:18.078Z",
+    "updatedAt": "2025-09-07T20:18:18.084Z",
+    "__v": 0
+  }
+]

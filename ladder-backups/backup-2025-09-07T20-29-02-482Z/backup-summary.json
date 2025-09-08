@@ -1,0 +1,17 @@
+{
+  "backupDate": "2025-09-07T20:29:03.194Z",
+  "ladders": 3,
+  "players": 67,
+  "matches": 15,
+  "challenges": 17,
+  "ladderNames": [
+    "550-plus",
+    "499-under",
+    "500-549"
+  ],
+  "playerCountByLadder": {
+    "550-plus": 7,
+    "499-under": 50,
+    "500-549": 10
+  }
+}

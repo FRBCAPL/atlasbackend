@@ -70,3 +70,4 @@ async function testRealPlayersScraper() {
 
 // Run the test
 testRealPlayersScraper().catch(console.error);
+

@@ -205,3 +205,4 @@ class FargoUpdateService {
 
 export default new FargoUpdateService();
 
+

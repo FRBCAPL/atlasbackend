@@ -330,7 +330,7 @@ router.post('/signup', async (req, res) => {
   try {
     console.log('📝 Signup request received:', req.body);
     
-    const { firstName, lastName, email, phone, fargoRate, experience, currentLeague, currentRanking } = req.body;
+    const { firstName, lastName, email, phone, fargoRate, experience, currentLeague, currentRanking, payNow, paymentMethod } = req.body;
     
     // Validate required fields
     if (!firstName || !lastName || !email) {
@@ -383,6 +383,8 @@ router.post('/signup', async (req, res) => {
       experience: experience || 'beginner',
       currentLeague: currentLeague || '',
       currentRanking: currentRanking || '',
+      payNow: payNow || false,
+      paymentMethod: paymentMethod || '',
       status: 'pending',
       submittedAt: new Date()
     });

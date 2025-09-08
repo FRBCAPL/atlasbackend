@@ -97,3 +97,4 @@ async function checkSearchPage() {
 // Run the analysis
 checkSearchPage().catch(console.error);
 
+

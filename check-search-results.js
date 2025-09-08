@@ -93,3 +93,4 @@ async function checkSearchResults() {
 
 // Run the check
 checkSearchResults().catch(console.error);
+

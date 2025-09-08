@@ -91,3 +91,4 @@ async function debugRatingExtraction() {
 
 // Run the debug
 debugRatingExtraction().catch(console.error);
+

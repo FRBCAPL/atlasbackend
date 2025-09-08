@@ -108,3 +108,4 @@ async function testDifferentSearchApproach() {
 
 // Run the test
 testDifferentSearchApproach().catch(console.error);
+

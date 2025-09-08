@@ -83,3 +83,4 @@ async function testFargoScraper() {
 // Run the test
 testFargoScraper().catch(console.error);
 
+

@@ -108,3 +108,4 @@ async function testNavigation() {
 
 // Run the test
 testNavigation().catch(console.error);
+

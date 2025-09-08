@@ -132,3 +132,4 @@ async function testFargoRateWebsite() {
 // Run the investigation
 testFargoRateWebsite().catch(console.error);
 
+

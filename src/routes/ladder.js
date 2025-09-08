@@ -229,11 +229,24 @@ router.get('/ladders/:ladderName/players', async (req, res) => {
   }
 });
 
-// Get player by email
-router.get('/player/:email', async (req, res) => {
+// Get player by email or ID
+router.get('/player/:identifier', async (req, res) => {
   try {
-    const { email } = req.params;
-    const player = await LadderPlayer.getPlayerByEmail(email);
+    const { identifier } = req.params;
+    let player = null;
+    
+    // Try to find by email first
+    if (identifier.includes('@')) {
+      player = await LadderPlayer.getPlayerByEmail(identifier);
+    } else {
+      // Try to find by ID
+      try {
+        player = await LadderPlayer.findById(identifier);
+      } catch (error) {
+        // If ID is invalid, try as email anyway
+        player = await LadderPlayer.getPlayerByEmail(identifier);
+      }
+    }
     
     if (!player) {
       return res.status(404).json({ error: 'Player not found' });
@@ -597,38 +610,42 @@ router.post('/challenge', async (req, res) => {
     await challenger.save();
     await defender.save();
     
-    // Send notification email to defender
-    try {
-      const { sendChallengeNotificationEmail } = await import('../services/nodemailerService.js');
-      
-      const emailData = {
-        to_email: defender.email,
-        to_name: `${defender.firstName} ${defender.lastName}`,
-        from_name: `${challenger.firstName} ${challenger.lastName}`,
-        challenge_type: challengeType,
-        entry_fee: entryFee,
-        race_length: raceLength,
-        game_type: gameType,
-        table_size: tableSize,
-        location: 'Legends Brews & Cues', // Default location
-        preferred_dates: preferredDates ? preferredDates.map(date => new Date(date).toLocaleDateString('en-US', { 
-          weekday: 'long', 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric' 
-        })).join(', ') : 'To be discussed',
-        challenge_message: postContent,
-        challenger_position: challenger.position,
-        defender_position: defender.position,
-        ladder_name: challenger.ladderName,
-        app_url: 'https://newapp-1-ic1v.onrender.com'
-      };
-      
-      await sendChallengeNotificationEmail(emailData);
-      console.log('📧 Challenge notification email sent to defender');
-    } catch (emailError) {
-      console.error('Error sending challenge notification email:', emailError);
-      // Don't fail the challenge creation if email fails
+    // Send notification email to defender (optional - don't fail if email service is down)
+    if (defender.email) {
+      try {
+        const { sendChallengeNotificationEmail } = await import('../services/nodemailerService.js');
+        
+        const emailData = {
+          to_email: defender.email,
+          to_name: `${defender.firstName} ${defender.lastName}`,
+          from_name: `${challenger.firstName} ${challenger.lastName}`,
+          challenge_type: challengeType,
+          entry_fee: entryFee,
+          race_length: raceLength,
+          game_type: gameType,
+          table_size: tableSize,
+          location: 'Legends Brews & Cues', // Default location
+          preferred_dates: preferredDates ? preferredDates.map(date => new Date(date).toLocaleDateString('en-US', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          })).join(', ') : 'To be discussed',
+          challenge_message: postContent,
+          challenger_position: challenger.position,
+          defender_position: defender.position,
+          ladder_name: challenger.ladderName,
+          app_url: 'https://newapp-1-ic1v.onrender.com'
+        };
+        
+        await sendChallengeNotificationEmail(emailData);
+        console.log('📧 Challenge notification email sent to defender');
+      } catch (emailError) {
+        console.error('Error sending challenge notification email:', emailError);
+        // Don't fail the challenge creation if email fails
+      }
+    } else {
+      console.log('⚠️ Defender has no email address, skipping email notification');
     }
     
     res.status(201).json(challenge);
@@ -750,6 +767,52 @@ router.get('/matches/recent', async (req, res) => {
   } catch (error) {
     console.error('Error fetching recent matches:', error);
     res.status(500).json({ error: 'Failed to fetch recent matches' });
+  }
+});
+
+// Complete a ladder match
+router.patch('/matches/:id/complete', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { winnerId, score, notes, venue, completedAt } = req.body;
+    
+    console.log('🔍 Completing match:', id, 'with winnerId:', winnerId);
+    
+    if (!winnerId || !score) {
+      return res.status(400).json({ error: 'winnerId and score are required' });
+    }
+    
+    const match = await LadderMatch.findById(id);
+    if (!match) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+    
+    if (match.status === 'completed') {
+      return res.status(400).json({ error: 'Match is already completed' });
+    }
+    
+    // Validate that winnerId is one of the players
+    const isPlayer1 = match.player1.toString() === winnerId.toString();
+    const isPlayer2 = match.player2.toString() === winnerId.toString();
+    
+    if (!isPlayer1 && !isPlayer2) {
+      return res.status(400).json({ error: 'Winner must be one of the match players' });
+    }
+    
+    // Complete the match
+    await match.complete(winnerId, score, notes, venue, completedAt);
+    
+    console.log('✅ Match completed successfully:', id);
+    
+    res.json({ 
+      success: true, 
+      message: 'Match completed successfully',
+      match 
+    });
+    
+  } catch (error) {
+    console.error('Error completing match:', error);
+    res.status(500).json({ error: 'Failed to complete match', details: error.message });
   }
 });
 

@@ -43,6 +43,77 @@ const addCustomLocationToDatabase = async (locationName) => {
   }
 };
 
+export const unifiedSignup = async (req, res) => {
+  try {
+    const { firstName, lastName, email, phone, password, appType } = req.body;
+
+    console.log('🔍 Unified Signup attempt for:', `${firstName} ${lastName} (${email})`);
+
+    if (!firstName || !lastName || !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'First name, last name, and email are required'
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await UnifiedUser.findOne({ 
+      email: { $regex: new RegExp(`^${email}$`, 'i') }
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: 'User with this email already exists'
+      });
+    }
+
+    // Create new unified user
+    const newUser = new UnifiedUser({
+      firstName,
+      lastName,
+      email: email.toLowerCase(),
+      phone: phone || '',
+      pin: `${firstName}${lastName}`, // Default PIN
+      password: password || null, // Optional password
+      isActive: true,
+      isApproved: true,
+      isPendingApproval: false,
+      role: 'player',
+      registrationDate: new Date(),
+      lastLogin: new Date(),
+      preferences: {
+        googleCalendarIntegration: false,
+        emailNotifications: true
+      }
+    });
+
+    await newUser.save();
+
+    console.log('✅ Created unified account for new user:', `${firstName} ${lastName}`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Account created successfully',
+      userId: newUser._id,
+      user: {
+        _id: newUser._id,
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        email: newUser.email,
+        pin: newUser.pin
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Unified signup error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during signup'
+    });
+  }
+};
+
 export const unifiedLogin = async (req, res) => {
   try {
     const { identifier } = req.body; // Can be email or PIN

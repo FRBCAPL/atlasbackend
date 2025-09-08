@@ -316,6 +316,30 @@ ladderMatchSchema.methods.getPositionChange = function(playerId) {
   return this.player2OldPosition - this.player2NewPosition;
 };
 
+// Method to complete a match
+ladderMatchSchema.methods.complete = function(winnerId, score, notes = '', venue = '', completedAt = null) {
+  this.status = 'completed';
+  this.winner = winnerId;
+  this.loser = this.player1.toString() === winnerId.toString() ? this.player2 : this.player1;
+  this.score = score;
+  this.completedDate = completedAt || new Date();
+  this.notes = notes;
+  if (venue) this.venue = venue;
+  this.updatedAt = new Date();
+  return this.save();
+};
+
+// Method to cancel a match
+ladderMatchSchema.methods.cancel = function(reason = '') {
+  this.status = 'cancelled';
+  this.cancellation = {
+    reason,
+    cancelledAt: new Date()
+  };
+  this.updatedAt = new Date();
+  return this.save();
+};
+
 const LadderMatch = mongoose.model('LadderMatch', ladderMatchSchema);
 
 export default LadderMatch;

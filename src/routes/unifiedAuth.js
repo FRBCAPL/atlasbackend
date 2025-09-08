@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   unifiedLogin,
+  unifiedSignup,
   getUnifiedUserStatus,
   claimUnifiedAccount,
   updateUnifiedProfile,
@@ -23,6 +24,9 @@ const router = express.Router();
 // Unified login endpoint
 router.post('/login', unifiedLogin);
 
+// Unified signup endpoint
+router.post('/signup', unifiedSignup);
+
 // Get unified user status
 router.get('/user-status/:email', getUnifiedUserStatus);
 
@@ -32,6 +36,8 @@ router.post('/claim-account', claimUnifiedAccount);
 // Update unified profile
 router.put('/update-profile', updateUnifiedProfile);
 router.post('/update-profile', updateUnifiedProfile); // Also allow POST method
+router.put('/profile/:userId', updateUnifiedProfile); // Alternative route for profile updates
+router.post('/profile/:userId', updateUnifiedProfile); // Also allow POST method
 
 // Change unified PIN
 router.put('/change-pin', changeUnifiedPin);

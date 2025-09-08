@@ -168,7 +168,10 @@ ladderPlayerSchema.statics.getPlayersByLadder = function(ladderName) {
 // Static method to get player by email
 ladderPlayerSchema.statics.getPlayerByEmail = function(email) {
   return this.findOne({ 
-    email: email.toLowerCase(),
+    $or: [
+      { email: email.toLowerCase() },
+      { 'unifiedAccount.email': email.toLowerCase() }
+    ],
     isActive: true 
   });
 };

@@ -552,12 +552,45 @@ router.post('/challenge', async (req, res) => {
       postContent 
     } = req.body;
     
-    // Get players
-    const challenger = await LadderPlayer.getPlayerByEmail(challengerEmail);
-    const defender = await LadderPlayer.getPlayerByEmail(defenderEmail);
+    // Get players - try by email first, then by name if email lookup fails
+    let challenger = await LadderPlayer.getPlayerByEmail(challengerEmail);
+    let defender = await LadderPlayer.getPlayerByEmail(defenderEmail);
+    
+    // If not found by email, try to find by name (for players without email addresses)
+    if (!challenger) {
+      // Try to find by name if email lookup failed
+      const [firstName, lastName] = challengerEmail.split('@')[0].split('.');
+      if (firstName && lastName) {
+        challenger = await LadderPlayer.findOne({
+          firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+          lastName: { $regex: new RegExp(`^${lastName}$`, 'i') },
+          isActive: true
+        });
+      }
+    }
+    
+    if (!defender) {
+      // Try to find by name if email lookup failed
+      const [firstName, lastName] = defenderEmail.split('@')[0].split('.');
+      if (firstName && lastName) {
+        defender = await LadderPlayer.findOne({
+          firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+          lastName: { $regex: new RegExp(`^${lastName}$`, 'i') },
+          isActive: true
+        });
+      }
+    }
     
     if (!challenger || !defender) {
       return res.status(404).json({ error: 'Player not found' });
+    }
+    
+    // Ensure players have email addresses for challenge creation
+    if (!challenger.email && challenger.unifiedAccount?.email) {
+      challenger.email = challenger.unifiedAccount.email;
+    }
+    if (!defender.email && defender.unifiedAccount?.email) {
+      defender.email = defender.unifiedAccount.email;
     }
     
     // Validate challenge eligibility
@@ -697,10 +730,40 @@ router.get('/challenges/sent/:email', async (req, res) => {
 });
 
 // Get challenges pending for a player
-router.get('/challenges/pending/:email', async (req, res) => {
+router.get('/challenges/pending/:identifier', async (req, res) => {
   try {
-    const { email } = req.params;
-    const player = await LadderPlayer.getPlayerByEmail(email);
+    const { identifier } = req.params;
+    console.log('🔍 Looking for player with identifier:', identifier);
+    
+    let player = null;
+    
+    // Try to find by ID first (if it's a valid ObjectId)
+    if (identifier.match(/^[0-9a-fA-F]{24}$/)) {
+      console.log('🔍 Trying to find by ID...');
+      player = await LadderPlayer.findById(identifier);
+    }
+    
+    // If not found by ID or not a valid ObjectId, try by email
+    if (!player) {
+      console.log('🔍 Trying to find by email...');
+      player = await LadderPlayer.getPlayerByEmail(identifier);
+    }
+    
+    // If still not found, try by unifiedAccount.email directly
+    if (!player) {
+      console.log('🔍 Trying to find by unifiedAccount.email...');
+      player = await LadderPlayer.findOne({
+        'unifiedAccount.email': identifier.toLowerCase(),
+        isActive: true
+      });
+    }
+    
+    console.log('🔍 Player found:', player ? 'YES' : 'NO');
+    if (player) {
+      console.log('🔍 Player ID:', player._id);
+      console.log('🔍 Player email field:', player.email);
+      console.log('🔍 Player unifiedAccount.email:', player.unifiedAccount?.email);
+    }
     
     if (!player) {
       return res.status(404).json({ error: 'Player not found' });

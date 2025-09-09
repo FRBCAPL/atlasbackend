@@ -25,21 +25,10 @@ const router = express.Router();
 // Helper function to check unified account status for a ladder player
 const checkUnifiedAccountStatus = async (firstName, lastName) => {
   try {
-    console.log(`🔍 Checking unified account status for: ${firstName} ${lastName}`);
-    
     const unifiedUser = await UnifiedUser.findOne({
       firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
       lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
     });
-    
-    if (unifiedUser) {
-      console.log(`   ✅ Found unified user: ${unifiedUser.firstName} ${unifiedUser.lastName}`);
-      console.log(`   📊 Status: Approved=${unifiedUser.isApproved}, Active=${unifiedUser.isActive}`);
-      console.log(`   📧 Email: "${unifiedUser.email}" (length: ${unifiedUser.email?.length || 0})`);
-      console.log(`   🎭 Role: ${unifiedUser.role}`);
-    } else {
-      console.log(`   ❌ No unified user found`);
-    }
     
     // Only consider it a valid unified account if:
     // 1. User exists
@@ -57,7 +46,6 @@ const checkUnifiedAccountStatus = async (firstName, lastName) => {
         unifiedUser.email.trim() !== '' &&
         unifiedUser.role === 'player' &&
         !isFakeEmail) {
-      console.log(`   🎯 VALID unified account - returning hasUnifiedAccount: true`);
       return {
         hasUnifiedAccount: true,
         isApproved: unifiedUser.isApproved,
@@ -78,10 +66,6 @@ const checkUnifiedAccountStatus = async (firstName, lastName) => {
       // Check for fake emails
       const isFakeEmail = /@(ladder\.local|ladder\.temp|test|temp|local|fake|example|dummy)/i.test(unifiedUser.email);
       if (isFakeEmail) reasons.push('fake email');
-      
-      console.log(`   ❌ INVALID unified account - reasons: ${reasons.join(', ')}`);
-    } else {
-      console.log(`   ❌ No unified user found`);
     }
     
     return {
@@ -138,10 +122,7 @@ router.get('/ladders', async (req, res) => {
 // Get all players across all ladders
 router.get('/players', async (req, res) => {
   try {
-    console.log('Fetching all ladder players across all ladders');
-    
     const players = await LadderPlayer.getAllPlayers();
-    console.log(`Found ${players.length} total players across all ladders`);
     
     // Enhance players with unified account status
     const enhancedPlayers = await Promise.all(players.map(async (player) => {
@@ -152,8 +133,6 @@ router.get('/players', async (req, res) => {
         unifiedAccount: unifiedStatus
       };
     }));
-    
-    console.log(`Enhanced ${enhancedPlayers.length} players with unified account status`);
     
     res.json(enhancedPlayers);
   } catch (error) {
@@ -166,10 +145,8 @@ router.get('/players', async (req, res) => {
 router.get('/ladders/:ladderName/players', async (req, res) => {
   try {
     const { ladderName } = req.params;
-    console.log('Fetching players for ladder:', ladderName);
     
     const players = await LadderPlayer.getPlayersByLadder(ladderName);
-    console.log(`Found ${players.length} players for ladder ${ladderName}`);
     
     // Enhance players with unified account status and calculate actual wins/losses
     const enhancedPlayers = await Promise.all(players.map(async (player) => {
@@ -206,21 +183,40 @@ router.get('/ladders/:ladderName/players', async (req, res) => {
           result: isWinner ? 'W' : 'L',
           opponent: `${opponent.firstName} ${opponent.lastName}`,
           date: recentMatch.completedDate || recentMatch.createdAt,
-          venue: recentMatch.venue
+          venue: recentMatch.venue,
+          matchType: recentMatch.matchType,
+          score: recentMatch.score,
+          playerRole: isPlayer1 ? 'challenger' : 'defender'
         };
       }
       
+      // Get recent matches for match history (limit to 10 most recent)
+      const recentMatches = matches.slice(0, 10).map(match => {
+        const isPlayer1 = match.player1._id.toString() === player._id.toString();
+        const opponent = isPlayer1 ? match.player2 : match.player1;
+        const isWinner = match.winner && match.winner._id.toString() === player._id.toString();
+        
+        return {
+          result: isWinner ? 'W' : 'L',
+          opponent: `${opponent.firstName} ${opponent.lastName}`,
+          date: match.completedDate || match.createdAt,
+          venue: match.venue,
+          matchType: match.matchType,
+          score: match.score,
+          playerRole: isPlayer1 ? 'player1' : 'player2'
+        };
+      });
+
       return {
         ...player.toObject(),
         wins: actualWins,
         losses: actualLosses,
         totalMatches: matches.length,
         lastMatch: lastMatch,
+        recentMatches: recentMatches,
         unifiedAccount: unifiedStatus
       };
     }));
-    
-    console.log(`Enhanced ${enhancedPlayers.length} players with unified account status and calculated stats`);
     
     res.json(enhancedPlayers);
   } catch (error) {
@@ -265,8 +261,6 @@ router.get('/player/:identifier', async (req, res) => {
       }
     });
     
-    console.log(`🔍 Player ${player.firstName} ${player.lastName}: ${actualWins} wins, ${actualLosses} losses (from ${matches.length} matches)`);
-    
     // Enhance player with unified account status
     const unifiedStatus = await checkUnifiedAccountStatus(player.firstName, player.lastName);
     
@@ -291,8 +285,6 @@ router.put('/player/:id', async (req, res) => {
     const { id } = req.params;
     const updateData = req.body;
     
-    console.log('Updating ladder player:', id, 'with data:', updateData);
-    
     // Find the player by ID
     const player = await LadderPlayer.findById(id);
     if (!player) {
@@ -315,8 +307,6 @@ router.put('/player/:id', async (req, res) => {
       filteredUpdates,
       { new: true, runValidators: true }
     );
-    
-    console.log('Successfully updated ladder player:', updatedPlayer.firstName, updatedPlayer.lastName);
     
     // Enhance updated player with unified account status
     const unifiedStatus = await checkUnifiedAccountStatus(updatedPlayer.firstName, updatedPlayer.lastName);
@@ -341,50 +331,37 @@ router.put('/player/:id', async (req, res) => {
 // Signup for ladder (new application)
 router.post('/signup', async (req, res) => {
   try {
-    console.log('📝 Signup request received:', req.body);
-    
     const { firstName, lastName, email, phone, fargoRate, experience, currentLeague, currentRanking, payNow, paymentMethod } = req.body;
     
     // Validate required fields
     if (!firstName || !lastName || !email) {
-      console.log('❌ Missing required fields');
       return res.status(400).json({ error: 'First name, last name, and email are required' });
     }
     
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      console.log('❌ Invalid email format:', email);
       return res.status(400).json({ error: 'Invalid email format' });
     }
     
     // Validate fargoRate if provided
     if (fargoRate !== undefined && fargoRate !== null) {
       if (typeof fargoRate !== 'number' || fargoRate < 0 || fargoRate > 850) {
-        console.log('❌ Invalid fargoRate:', fargoRate);
         return res.status(400).json({ error: 'FargoRate must be a number between 0 and 850' });
       }
     }
     
-    console.log('✅ Validation passed, checking for existing players...');
-    
     // Check if player already exists
     const existingPlayer = await LadderPlayer.findOne({ email });
     if (existingPlayer) {
-      console.log('❌ Player already exists with email:', email);
       return res.status(400).json({ error: 'A player with this email already exists' });
     }
-    
-    console.log('✅ No existing player found, checking for existing applications...');
     
     // Check if signup application already exists
     const existingApplication = await LadderSignupApplication.findOne({ email });
     if (existingApplication) {
-      console.log('❌ Application already exists with email:', email);
       return res.status(400).json({ error: 'A signup application with this email already exists' });
     }
-    
-    console.log('✅ No existing application found, creating new application...');
     
     // Create a new ladder signup application
     const signupApplication = new LadderSignupApplication({
@@ -402,11 +379,7 @@ router.post('/signup', async (req, res) => {
       submittedAt: new Date()
     });
     
-    console.log('📝 Signup application object created:', signupApplication);
-    
     await signupApplication.save();
-    
-    console.log('✅ Signup application saved successfully');
     
     // Send notification email (you can implement this later)
     // await sendSignupNotification(signupApplication);
@@ -672,13 +645,10 @@ router.post('/challenge', async (req, res) => {
         };
         
         await sendChallengeNotificationEmail(emailData);
-        console.log('📧 Challenge notification email sent to defender');
       } catch (emailError) {
         console.error('Error sending challenge notification email:', emailError);
         // Don't fail the challenge creation if email fails
       }
-    } else {
-      console.log('⚠️ Defender has no email address, skipping email notification');
     }
     
     res.status(201).json(challenge);
@@ -733,36 +703,25 @@ router.get('/challenges/sent/:email', async (req, res) => {
 router.get('/challenges/pending/:identifier', async (req, res) => {
   try {
     const { identifier } = req.params;
-    console.log('🔍 Looking for player with identifier:', identifier);
     
     let player = null;
     
     // Try to find by ID first (if it's a valid ObjectId)
     if (identifier.match(/^[0-9a-fA-F]{24}$/)) {
-      console.log('🔍 Trying to find by ID...');
       player = await LadderPlayer.findById(identifier);
     }
     
     // If not found by ID or not a valid ObjectId, try by email
     if (!player) {
-      console.log('🔍 Trying to find by email...');
       player = await LadderPlayer.getPlayerByEmail(identifier);
     }
     
     // If still not found, try by unifiedAccount.email directly
     if (!player) {
-      console.log('🔍 Trying to find by unifiedAccount.email...');
       player = await LadderPlayer.findOne({
         'unifiedAccount.email': identifier.toLowerCase(),
         isActive: true
       });
-    }
-    
-    console.log('🔍 Player found:', player ? 'YES' : 'NO');
-    if (player) {
-      console.log('🔍 Player ID:', player._id);
-      console.log('🔍 Player email field:', player.email);
-      console.log('🔍 Player unifiedAccount.email:', player.unifiedAccount?.email);
     }
     
     if (!player) {
@@ -839,27 +798,14 @@ router.patch('/matches/:id/complete', async (req, res) => {
     const { id } = req.params;
     const { winnerId, score, notes, venue, completedAt } = req.body;
     
-    console.log('🔍 Completing match:', id, 'with winnerId:', winnerId);
-    console.log('🔍 Request body:', req.body);
-    
     if (!winnerId || !score) {
       return res.status(400).json({ error: 'winnerId and score are required' });
     }
     
     const match = await LadderMatch.findById(id);
     if (!match) {
-      console.log('❌ Match not found with ID:', id);
       return res.status(404).json({ error: 'Match not found' });
     }
-    
-    console.log('🔍 Found match:', {
-      id: match._id,
-      status: match.status,
-      player1: match.player1,
-      player2: match.player2,
-      player1OldPosition: match.player1OldPosition,
-      player2OldPosition: match.player2OldPosition
-    });
     
     if (match.status === 'completed') {
       return res.status(400).json({ error: 'Match is already completed' });
@@ -869,28 +815,15 @@ router.patch('/matches/:id/complete', async (req, res) => {
     const isPlayer1 = match.player1 && match.player1.toString() === winnerId.toString();
     const isPlayer2 = match.player2 && match.player2.toString() === winnerId.toString();
     
-    console.log('🔍 Player validation:', {
-      winnerId,
-      matchPlayer1: match.player1,
-      matchPlayer2: match.player2,
-      isPlayer1,
-      isPlayer2
-    });
-    
     if (!isPlayer1 && !isPlayer2) {
       return res.status(400).json({ error: 'Winner must be one of the match players' });
     }
-    
-    // Complete the match
-    console.log('🔍 Calling match.complete()...');
     
     // Set the reportedBy field (required for completed matches)
     match.reportedBy = winnerId; // The winner is reporting the match result
     match.reportedAt = new Date();
     
     await match.complete(winnerId, score, notes, venue, completedAt);
-    
-    console.log('✅ Match completed successfully:', id);
     
     res.json({ 
       success: true, 

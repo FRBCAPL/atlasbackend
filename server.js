@@ -7,8 +7,6 @@ import cron from 'node-cron';
 import { exec } from 'child_process';
 import { deleteExpiredMatchChannels } from './src/cleanupChannels.js';
 import { createMatchEvent } from './src/googleCalendar.js';
-import fargoUpdateService from './src/services/fargoUpdateService.js';
-import fargoScraperService from './src/services/fargoScraperService.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import helmet from 'helmet';
@@ -31,6 +29,7 @@ console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
 import apiRoutes from './src/routes/index.js';
 import Division from './src/models/Division.js';
 import unifiedAuthRoutes from './src/routes/unifiedAuth.js';
+import fargoUpdaterRoutes from './src/routes/fargoUpdater.js';
 
 // Import models to ensure they are registered with Mongoose
 import './src/models/LadderSignupApplication.js';
@@ -83,6 +82,8 @@ const allowedOrigins = [
   'https://www.frontrangepool.com',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
   'https://frbcapl.github.io',
@@ -412,6 +413,9 @@ async function startServer() {
   app.get('/live', livenessCheck);
   app.get('/metrics', metrics);
 
+  // Fargo updater routes (register before main API routes to avoid conflicts)
+  app.use('/api/fargo', fargoUpdaterRoutes);
+  
   // API routes
   app.use('/api', apiRoutes);
   
@@ -975,57 +979,6 @@ async function startServer() {
       .catch(err => console.error('Cleanup failed:', err));
   });
 
-  // Gradual Fargo rating updates - runs every 6 hours
-  cron.schedule('0 */6 * * *', async () => {
-    try {
-      console.log('🔄 Starting gradual Fargo rating update...');
-      
-      // Get the next player index to update
-      const playerIndex = await fargoScraperService.getNextPlayerIndex('499-under');
-      
-      // Update a single player
-      try {
-        const result = await fargoScraperService.updateSinglePlayer('499-under', playerIndex);
-        
-        if (result.success) {
-          console.log(`✅ Updated player: ${result.player}`);
-          if (result.oldRating !== result.newRating) {
-            console.log(`   Rating changed: ${result.oldRating} → ${result.newRating}`);
-          } else {
-            console.log(`   No rating change (${result.oldRating})`);
-          }
-          
-          // Save the next index for the next run
-          await fargoScraperService.savePlayerIndex('499-under', result.nextIndex);
-          
-          fargoUpdateService.log(`Gradual update: ${result.player} - ${result.oldRating} → ${result.newRating}`);
-        } else {
-          console.log(`⚠️ Failed to update player: ${result.reason}`);
-          fargoUpdateService.log(`Gradual update failed: ${result.reason}`, 'WARN');
-        }
-        
-      } catch (scraperError) {
-        console.log('⚠️ Gradual update failed:', scraperError.message);
-        fargoUpdateService.log(`Gradual update error: ${scraperError.message}`, 'ERROR');
-      }
-      
-      console.log('✅ Gradual Fargo rating update completed');
-    } catch (error) {
-      console.error('❌ Gradual Fargo rating update failed:', error);
-      fargoUpdateService.log(`Gradual update failed: ${error.message}`, 'ERROR');
-    }
-  });
-
-  // Backup reminder - runs daily at 2 AM
-  cron.schedule('0 2 * * *', async () => {
-    try {
-      console.log('💾 Creating daily Fargo rating backup...');
-      await fargoUpdateService.createBackup('499-under');
-      console.log('✅ Daily backup completed');
-    } catch (error) {
-      console.error('❌ Daily backup failed:', error);
-    }
-  });
 
   // Add database usage logging on startup
   async function logDatabaseUsage() {

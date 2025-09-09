@@ -22,7 +22,6 @@ const addCustomLocationToDatabase = async (locationName) => {
     });
 
     if (existingLocation) {
-      console.log(`📍 Location "${trimmedName}" already exists in database`);
       return true; // Location exists, consider it successful
     }
 
@@ -35,7 +34,6 @@ const addCustomLocationToDatabase = async (locationName) => {
     });
 
     await newLocation.save();
-    console.log(`✅ Added custom location "${trimmedName}" to database`);
     return true;
 
   } catch (error) {
@@ -47,8 +45,6 @@ const addCustomLocationToDatabase = async (locationName) => {
 export const unifiedSignup = async (req, res) => {
   try {
     const { firstName, lastName, email, phone, password, appType } = req.body;
-
-    console.log('🔍 Unified Signup attempt for:', `${firstName} ${lastName} (${email})`);
 
     if (!firstName || !lastName || !email) {
       return res.status(400).json({
@@ -91,8 +87,6 @@ export const unifiedSignup = async (req, res) => {
 
     await newUser.save();
 
-    console.log('✅ Created unified account for new user:', `${firstName} ${lastName}`);
-
     res.status(201).json({
       success: true,
       message: 'Account created successfully',
@@ -119,8 +113,6 @@ export const unifiedLogin = async (req, res) => {
   try {
     const { identifier } = req.body; // Can be email or PIN
 
-    console.log('🔍 Unified Login attempt with identifier:', identifier);
-
     if (!identifier) {
       return res.status(400).json({
         success: false,
@@ -137,16 +129,16 @@ export const unifiedLogin = async (req, res) => {
     });
 
     if (foundUser) {
-      console.log('🔍 Found unified user by email:', `${foundUser.firstName} ${foundUser.lastName}`);
+
     }
 
     // 2. If not found by email, try to find by PIN
     if (!foundUser) {
-      console.log('🔍 Checking PIN...');
+
       foundUser = await UnifiedUser.findOne({ pin: identifier });
       
       if (foundUser) {
-        console.log('🔍 Found user by PIN:', `${foundUser.firstName} ${foundUser.lastName}`);
+
       }
     }
 
@@ -185,8 +177,6 @@ export const unifiedLogin = async (req, res) => {
       }
     };
 
-    console.log('✅ Unified login successful for:', `${foundUser.firstName} ${foundUser.lastName}`);
-
     res.json(responseData);
 
   } catch (error) {
@@ -201,8 +191,6 @@ export const unifiedLogin = async (req, res) => {
 export const getUnifiedUserStatus = async (req, res) => {
   try {
     const { email } = req.params;
-
-    console.log('🔍 Getting unified user status for email:', email);
 
     if (!email) {
       return res.status(400).json({
@@ -269,8 +257,6 @@ export const getUnifiedUserStatus = async (req, res) => {
       };
     }
 
-    console.log('✅ Unified user status retrieved for:', `${unifiedUser.firstName} ${unifiedUser.lastName}`);
-
     res.json(response);
 
   } catch (error) {
@@ -327,8 +313,7 @@ export const claimUnifiedAccount = async (req, res) => {
 
     // Search by PIN if email not found or not provided
     if (!leaguePlayer && !ladderPlayer && pin) {
-      console.log('🔍 Searching by PIN...');
-      
+
       // Search league players by PIN
       const allLeaguePlayers = await User.find({});
       for (const player of allLeaguePlayers) {
@@ -336,7 +321,7 @@ export const claimUnifiedAccount = async (req, res) => {
         if (isPinValid) {
           leaguePlayer = player;
           foundEmail = player.email;
-          console.log('✅ Found league player by PIN:', player.firstName, player.lastName);
+
           break;
         }
       }
@@ -349,7 +334,7 @@ export const claimUnifiedAccount = async (req, res) => {
           if (isPinValid) {
             ladderPlayer = player;
             foundEmail = player.email;
-            console.log('✅ Found ladder player by PIN:', player.firstName, player.lastName);
+
             break;
           }
         }
@@ -358,8 +343,7 @@ export const claimUnifiedAccount = async (req, res) => {
 
     // Search by name if no players found yet
     if (!leaguePlayer && !ladderPlayer) {
-      console.log('🔍 Searching by name...');
-      
+
       // Check league system by name
       leaguePlayer = await User.findOne({
         firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
@@ -374,11 +358,11 @@ export const claimUnifiedAccount = async (req, res) => {
 
       if (leaguePlayer) {
         foundEmail = leaguePlayer.email;
-        console.log('✅ Found league player by name:', leaguePlayer.firstName, leaguePlayer.lastName);
+
       }
       if (ladderPlayer) {
         foundEmail = ladderPlayer.email || foundEmail;
-        console.log('✅ Found ladder player by name:', ladderPlayer.firstName, ladderPlayer.lastName);
+
       }
     }
 
@@ -395,12 +379,12 @@ export const claimUnifiedAccount = async (req, res) => {
 
     // Validate name matches
     if (leaguePlayer && !verifyNameMatch(leaguePlayer)) {
-      console.log('❌ League player name mismatch');
+
       leaguePlayer = null;
     }
     
     if (ladderPlayer && !verifyNameMatch(ladderPlayer)) {
-      console.log('❌ Ladder player name mismatch');
+
       ladderPlayer = null;
     }
 
@@ -416,8 +400,7 @@ export const claimUnifiedAccount = async (req, res) => {
 
     if (leaguePlayer || ladderPlayer) {
       // SCENARIO 1: Existing player found - Auto-approve and create unified account
-      console.log('🎯 SCENARIO 1: Existing player found - Auto-approving');
-      
+
       const finalEmail = foundEmail || email;
       if (!finalEmail) {
         return res.status(400).json({
@@ -444,7 +427,6 @@ export const claimUnifiedAccount = async (req, res) => {
     });
 
     await newUnifiedUser.save();
-      console.log('✅ Created unified account for existing player:', `${firstName} ${lastName}`);
 
       response.scenario = 'existing_player_auto_approved';
       response.message = 'Existing player account automatically approved and unified!';
@@ -481,8 +463,7 @@ export const claimUnifiedAccount = async (req, res) => {
 
     } else if (email) {
       // SCENARIO 2: New user with email - Create pending account requiring admin approval
-      console.log('🎯 SCENARIO 2: New user with email - Requires admin approval');
-      
+
       const newUnifiedUser = new UnifiedUser({
         firstName: firstName,
         lastName: lastName,
@@ -501,7 +482,6 @@ export const claimUnifiedAccount = async (req, res) => {
       });
 
       await newUnifiedUser.save();
-      console.log('✅ Created pending unified account for new user:', `${firstName} ${lastName}`);
 
       response.scenario = 'new_user_pending_approval';
       response.message = 'Account created successfully! Please wait for admin approval.';
@@ -516,15 +496,13 @@ export const claimUnifiedAccount = async (req, res) => {
 
     } else {
       // SCENARIO 3: No email provided and no existing player found
-      console.log('🎯 SCENARIO 3: No email and no existing player - Cannot proceed');
-      
+
       return res.status(400).json({
         success: false,
         message: 'Email address is required for new users. Please provide your email address.'
       });
     }
 
-    console.log('✅ Claiming process completed successfully');
     res.json(response);
 
   } catch (error) {
@@ -539,9 +517,6 @@ export const claimUnifiedAccount = async (req, res) => {
 export const updateUnifiedProfile = async (req, res) => {
   try {
     const { userId, email, appType, updates } = req.body;
-
-    console.log('🚀 SIMPLIFIED PROFILE UPDATE - NEW CODE RUNNING');
-    console.log('🔍 Updating profile:', { userId, email, appType, updates });
 
     if (!userId || !appType || !updates) {
       return res.status(400).json({
@@ -564,13 +539,6 @@ export const updateUnifiedProfile = async (req, res) => {
       });
     }
 
-    console.log('🔍 Found user for update:', {
-      _id: user._id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName
-    });
-
     // For now, let's just update the main user record and return success
     // This is a simplified approach to get profile updates working
     if (updates.phone) {
@@ -581,8 +549,6 @@ export const updateUnifiedProfile = async (req, res) => {
     }
     
     await user.save();
-    
-    console.log('✅ User profile updated successfully');
 
     res.json({
       success: true,
@@ -608,8 +574,6 @@ export const updateUnifiedProfile = async (req, res) => {
 export const changeUnifiedPin = async (req, res) => {
   try {
     const { userId, currentPin, newPin } = req.body;
-
-    console.log('🔍 Changing unified PIN for user ID:', userId);
 
     if (!userId || !currentPin || !newPin) {
       return res.status(400).json({
@@ -662,8 +626,6 @@ export const changeUnifiedPin = async (req, res) => {
     user.pin = hashedNewPin;
     await user.save();
 
-    console.log('✅ Unified PIN changed for:', `${user.firstName} ${user.lastName}`);
-
     res.json({
       success: true,
       message: 'PIN changed successfully'
@@ -685,13 +647,10 @@ export const changeUnifiedPin = async (req, res) => {
 // Get all unified users for admin management
 export const getAllUnifiedUsers = async (req, res) => {
   try {
-    console.log('🔍 Admin: Getting all unified users');
 
     const users = await UnifiedUser.find({})
       .select('-pin') // Don't return PINs for security
       .sort({ firstName: 1, lastName: 1 });
-
-    console.log(`✅ Admin: Found ${users.length} unified users`);
 
     res.json({
       success: true,
@@ -712,8 +671,6 @@ export const searchUnifiedUsers = async (req, res) => {
   try {
     const { q } = req.query;
 
-    console.log('🔍 Admin: Searching unified users with query:', q);
-
     if (!q || q.trim().length === 0) {
       return res.status(400).json({
         success: false,
@@ -733,8 +690,6 @@ export const searchUnifiedUsers = async (req, res) => {
     .select('-pin') // Don't return PINs for security
     .sort({ firstName: 1, lastName: 1 });
 
-    console.log(`✅ Admin: Found ${users.length} users matching "${q}"`);
-
     res.json({
       success: true,
       users: users
@@ -753,8 +708,6 @@ export const searchUnifiedUsers = async (req, res) => {
 export const getUnifiedUserProfile = async (req, res) => {
   try {
     const { userId } = req.params;
-
-    console.log('🔍 Admin: Getting unified user profile for ID:', userId);
 
     if (!userId) {
       return res.status(400).json({
@@ -778,8 +731,6 @@ export const getUnifiedUserProfile = async (req, res) => {
        lastName: user.lastName
      });
 
-    console.log('✅ Admin: Retrieved user profile for:', `${user.firstName} ${user.lastName}`);
-
     res.json({
       success: true,
       user: user,
@@ -800,8 +751,6 @@ export const getUnifiedUserProfile = async (req, res) => {
 export const addUnifiedUser = async (req, res) => {
   try {
     const userData = req.body;
-
-    console.log('🔍 Admin: Adding new unified user:', userData.email);
 
     if (!userData.email || !userData.firstName || !userData.lastName) {
       return res.status(400).json({
@@ -833,8 +782,6 @@ export const addUnifiedUser = async (req, res) => {
 
     await newUser.save();
 
-    console.log('✅ Admin: Added new unified user:', `${newUser.firstName} ${newUser.lastName}`);
-
     res.json({
       success: true,
       user: newUser,
@@ -855,8 +802,6 @@ export const updateUnifiedUser = async (req, res) => {
   try {
     const { userId } = req.params;
     const updateData = req.body;
-
-    console.log('🔍 Admin: Updating unified user ID:', userId);
 
     if (!userId) {
       return res.status(400).json({
@@ -887,8 +832,6 @@ export const updateUnifiedUser = async (req, res) => {
 
     await user.save();
 
-    console.log('✅ Admin: Updated unified user:', `${user.firstName} ${user.lastName}`);
-
     res.json({
       success: true,
       user: user,
@@ -908,8 +851,6 @@ export const updateUnifiedUser = async (req, res) => {
 export const deleteUnifiedUser = async (req, res) => {
   try {
     const { userId } = req.params;
-
-    console.log('🔍 Admin: Deleting unified user ID:', userId);
 
     if (!userId) {
       return res.status(400).json({
@@ -936,8 +877,6 @@ export const deleteUnifiedUser = async (req, res) => {
     // Delete the user
     await UnifiedUser.findByIdAndDelete(userId);
 
-    console.log('✅ Admin: Deleted unified user:', `${user.firstName} ${user.lastName}`);
-
     res.json({
       success: true,
       message: 'User deleted successfully'
@@ -956,11 +895,6 @@ export const deleteUnifiedUser = async (req, res) => {
 export const copyProfileData = async (req, res) => {
   try {
     const { userId, fromApp, toApp, email } = req.body;
-
-    console.log(`🔍 Copying profile data from ${fromApp} to ${toApp}`);
-    console.log('Request body:', req.body);
-    console.log('User ID:', userId);
-    console.log('Email:', email);
 
     if (!userId || !fromApp || !toApp) {
       return res.status(400).json({
@@ -1003,12 +937,10 @@ export const copyProfileData = async (req, res) => {
     }
 
     // Log what we found
-    console.log('Source profile found:', !!sourceProfile);
-    console.log('Target profile found:', !!targetProfile);
 
     // If source profile doesn't exist, create it
     if (!sourceProfile) {
-      console.log('Creating new source profile...');
+
       sourceProfile = new SimpleProfile({
         userId,
         appType: fromApp,
@@ -1017,7 +949,7 @@ export const copyProfileData = async (req, res) => {
       });
       try {
         await sourceProfile.save();
-        console.log('Created source profile:', sourceProfile);
+
       } catch (error) {
         console.error('Error creating source profile:', error);
         return res.status(500).json({
@@ -1028,20 +960,13 @@ export const copyProfileData = async (req, res) => {
     }
 
     // Both profiles should exist now since we create them if they don't exist
-    console.log('Final source profile:', sourceProfile);
-    console.log('Final target profile:', targetProfile);
 
     // Copy shared fields
     const fieldsToCopy = ['availability', 'locations'];
     let changesMade = false;
-    
-    console.log('Source profile before copy:', sourceProfile);
-    console.log('Target profile before copy:', targetProfile);
-    
+
     for (const field of fieldsToCopy) {
-      console.log(`Checking field: ${field}`);
-      console.log(`Source ${field}:`, sourceProfile[field]);
-      
+
       // Initialize empty values if they don't exist
       if (!sourceProfile[field]) {
         sourceProfile[field] = field === 'locations' ? '' : {};
@@ -1053,13 +978,10 @@ export const copyProfileData = async (req, res) => {
       // Always copy the field, even if empty
       targetProfile[field] = JSON.parse(JSON.stringify(sourceProfile[field])); // Deep copy
       changesMade = true;
-      console.log(`Copied ${field}:`, targetProfile[field]);
+
     }
 
-    console.log('Target profile after copy:', targetProfile);
     await targetProfile.save();
-
-    console.log(`✅ Successfully copied profile data from ${fromApp} to ${toApp}`);
 
     res.json({
       success: true,
@@ -1083,10 +1005,6 @@ export const checkProfileCompleteness = async (req, res) => {
   try {
     const { appType } = req.params;
     const { email } = req.query;
-
-    console.log(`🔍 Checking ${appType} profile completeness for:`, email);
-    console.log('Request params:', req.params);
-    console.log('Request query:', req.query);
 
     if (!appType || !email) {
       return res.status(400).json({
@@ -1142,11 +1060,6 @@ export const checkProfileCompleteness = async (req, res) => {
 
     const isComplete = missingFields.length === 0;
 
-    console.log(`✅ Profile completeness check for ${email}:`, {
-      isComplete,
-      missingFields
-    });
-
     res.json({
       success: true,
       isComplete,
@@ -1165,7 +1078,6 @@ export const checkProfileCompleteness = async (req, res) => {
 
 export const getUnifiedSystemStats = async (req, res) => {
   try {
-    console.log('🔍 Admin: Getting unified system statistics');
 
     const [
       totalUsers,
@@ -1191,8 +1103,6 @@ export const getUnifiedSystemStats = async (req, res) => {
        bothProfiles: Math.min(leagueProfiles, ladderPlayers) // Rough estimate
     };
 
-    console.log('✅ Admin: Retrieved system statistics');
-
     res.json({
       success: true,
       stats: stats
@@ -1211,8 +1121,6 @@ export const getUnifiedSystemStats = async (req, res) => {
 export const getProfileData = async (req, res) => {
   try {
     const { userId, appType, email } = req.query;
-
-    console.log('🔍 Getting profile data:', { userId, appType, email });
 
     if (!appType) {
       return res.status(400).json({
@@ -1238,14 +1146,6 @@ export const getProfileData = async (req, res) => {
       });
     }
 
-    console.log('🔍 Found unified user:', {
-      _id: user._id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      phone: user.phone
-    });
-
     // Get profile data from BOTH collections for smart merging
     let profileData = {
       availability: {},
@@ -1256,30 +1156,20 @@ export const getProfileData = async (req, res) => {
     };
 
          // Check if user has both profiles
-     console.log('🔍 Searching for league profile with userId:', user._id);
+
      const leagueProfile = await LeagueProfile.findOne({ userId: user._id });
-     console.log('🔍 LeagueProfile search result:', leagueProfile);
-     
-     console.log('🔍 Searching for ladder player by name only...');
+
      const ladderPlayer = await LadderPlayer.findOne({ 
        firstName: user.firstName, 
        lastName: user.lastName
      });
-     console.log('🔍 LadderPlayer search result:', ladderPlayer);
-    
+
          const hasLeagueProfile = !!leagueProfile;
      const hasLadderProfile = !!ladderPlayer;
-     
-     console.log('🔍 Profile status:', {
-       hasLeagueProfile,
-       hasLadderProfile,
-       isDualPlayer: hasLeagueProfile && hasLadderProfile
-     });
 
          if (hasLeagueProfile && hasLadderProfile) {
        // DUAL PLAYER: Smart merge data from both collections
-       console.log('🔄 Smart merging data for dual player');
-       
+
                // Merge availability: prefer non-empty values, combine if both have data
         const leagueAvailability = leagueProfile.availability || {};
         const ladderAvailability = ladderPlayer.availability || {};
@@ -1287,15 +1177,15 @@ export const getProfileData = async (req, res) => {
         if (Object.keys(leagueAvailability).length > 0 && Object.keys(ladderAvailability).length > 0) {
           // Both have availability data - merge them intelligently
           profileData.availability = { ...ladderAvailability, ...leagueAvailability };
-          console.log('✅ Merged availability from both profiles');
+
         } else if (Object.keys(leagueAvailability).length > 0) {
           // Only league has availability
           profileData.availability = leagueAvailability;
-          console.log('📅 Using league availability');
+
         } else if (Object.keys(ladderAvailability).length > 0) {
           // Only ladder has availability
           profileData.availability = ladderAvailability;
-          console.log('📅 Using ladder availability');
+
         }
         
         // Merge locations: prefer non-empty values
@@ -1305,19 +1195,19 @@ export const getProfileData = async (req, res) => {
           const ladderLocations = ladderPlayer.locations.split(',').map(l => l.trim()).filter(l => l);
           const combinedLocations = [...new Set([...leagueLocations, ...ladderLocations])];
           profileData.locations = combinedLocations.join(', ');
-          console.log('📍 Merged locations from both profiles');
+
         } else if (leagueProfile.locations) {
           profileData.locations = leagueProfile.locations;
-          console.log('📍 Using league locations');
+
         } else if (ladderPlayer.locations) {
           profileData.locations = ladderPlayer.locations;
-          console.log('📍 Using ladder locations');
+
         }
        
        // Get league divisions
        if (leagueProfile.divisions && leagueProfile.divisions.length > 0) {
          profileData.divisions = leagueProfile.divisions;
-         console.log('🏆 Found league divisions:', leagueProfile.divisions);
+
        }
        
                // Get ladder info
@@ -1335,7 +1225,7 @@ export const getProfileData = async (req, res) => {
              ladderName: ladderPlayer.ladderName || 'Unnamed Ladder',
              position: ladderPlayer.position || 'Unranked'
            };
-           console.log('🏆 Found ladder info:', profileData.ladderInfo);
+
          } else {
            console.log('⚠️ No ladder info found in player (dual player)');
          }
@@ -1354,7 +1244,7 @@ export const getProfileData = async (req, res) => {
        // Get league divisions
        if (leagueProfile.divisions && leagueProfile.divisions.length > 0) {
          profileData.divisions = leagueProfile.divisions;
-         console.log('🏆 Found league divisions:', leagueProfile.divisions);
+
        }
        
            } else if (hasLadderProfile) {
@@ -1383,15 +1273,14 @@ export const getProfileData = async (req, res) => {
              ladderName: ladderPlayer.ladderName || 'Unnamed Ladder',
              position: ladderPlayer.position || 'Unranked'
            };
-           console.log('🏆 Found ladder info:', profileData.ladderInfo);
+
          } else {
            console.log('⚠️ No ladder info found in player (ladder-only)');
          }
        
      } else {
        // NEW USER: Create basic profile in league collection only
-       console.log('🔧 Creating new league profile for new user');
-       
+
        const basicProfile = {
          userId: user._id,
          user: {
@@ -1405,12 +1294,8 @@ export const getProfileData = async (req, res) => {
        
        // Only create league profile - don't assume they're a ladder player
        await new LeagueProfile(basicProfile).save();
-       
-       console.log('✅ Created new league profile only');
-     }
 
-    console.log('✅ Retrieved profile data for:', `${user.firstName} ${user.lastName}`);
-    console.log('📤 Sending profile data:', profileData);
+     }
 
     res.json({
       success: true,

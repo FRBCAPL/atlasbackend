@@ -32,8 +32,6 @@ import monetizationRoutes from './monetization.js';
 // Email routes
 import emailRoutes from './email.js';
 
-// Fargo admin routes
-import fargoAdminRoutes from './fargoAdmin.js';
 
 const router = express.Router();
 
@@ -67,8 +65,6 @@ router.use('/monetization', monetizationRoutes);
 // Email routes
 router.use('/email', emailRoutes);
 
-// Fargo admin routes
-router.use('/fargo-admin', fargoAdminRoutes);
 
 // Simple test route
 router.get('/test', (req, res) => {

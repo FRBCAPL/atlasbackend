@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ladder Promotion Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .step {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-left: 5px solid #28a745;
+        }
+
+        .step h3 {
+            color: #28a745;
+            margin-bottom: 15px;
+            font-size: 1.4em;
+        }
+
+        .step p {
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px 5px;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40,167,69,0.3);
+        }
+
+        .button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .button.danger {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+        }
+
+        .button.warning {
+            background: linear-gradient(135deg, #ffc107, #e0a800);
+            color: #212529;
+        }
+
+        .promotion-container {
+            margin-top: 20px;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .promotion-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 2px solid #e9ecef;
+            display: grid;
+            grid-template-columns: 60px 1fr 120px 120px 120px 120px;
+            gap: 20px;
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .promotion-row {
+            display: grid;
+            grid-template-columns: 60px 1fr 120px 120px 120px 120px;
+            gap: 20px;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e9ecef;
+            align-items: center;
+            transition: background-color 0.2s ease;
+        }
+
+        .promotion-row:hover {
+            background-color: #f8f9fa;
+        }
+
+        .promotion-row:last-child {
+            border-bottom: none;
+        }
+
+        .position {
+            font-weight: bold;
+            color: #6c757d;
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        .player-name {
+            font-weight: 500;
+            color: #333;
+            font-size: 1em;
+        }
+
+        .current-rating {
+            font-weight: bold;
+            color: #dc3545;
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        .current-ladder {
+            font-weight: bold;
+            color: #007bff;
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        .target-ladder {
+            font-weight: bold;
+            color: #28a745;
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        .promote-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+
+        .promote-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(40,167,69,0.3);
+        }
+
+        .promote-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #28a745;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .promotion-header,
+            .promotion-row {
+                grid-template-columns: 50px 1fr 80px 80px 80px 100px;
+                gap: 10px;
+                padding: 10px 15px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .header p {
+                font-size: 1em;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .promotion-header,
+            .promotion-row {
+                grid-template-columns: 40px 1fr 70px 70px 70px 90px;
+                gap: 8px;
+                padding: 8px 10px;
+                font-size: 0.9em;
+            }
+            
+            .player-name {
+                font-size: 0.9em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⬆️ Ladder Promotion Tool</h1>
+            <p>Move players who have outgrown their current ladder to the appropriate higher ladder</p>
+        </div>
+
+        <div class="content">
+            <!-- Step 1: Check for Promotions -->
+            <div class="step">
+                <h3>Step 1: Check for Players Ready for Promotion</h3>
+                <p>This will find players whose Fargo ratings exceed their current ladder's maximum rating.</p>
+                <button class="button" id="checkPromotionsBtn">Check for Promotions</button>
+                <button class="button warning" id="fixPositionsBtn">Fix Ladder Positions</button>
+                <button class="button danger" id="cleanTestMatchesBtn">Clean Test Matches</button>
+                <button class="button" id="refreshLadderBtn" style="background: linear-gradient(135deg, #007bff, #0056b3);">Refresh Ladder Data</button>
+                <div id="checkStatus"></div>
+            </div>
+
+            <!-- Step 2: Review Promotions -->
+            <div class="step hidden" id="reviewStep">
+                <h3>Step 2: Review Players to be Promoted</h3>
+                <p>Review the players who will be moved to higher ladders. They will be added at the bottom of their new ladder.</p>
+                <div id="promotionsContainer"></div>
+                <button class="button" id="promoteAllBtn">Promote All Players</button>
+                <button class="button danger" id="cancelBtn">Cancel</button>
+                <div id="promotionStatus"></div>
+            </div>
+
+            <!-- Step 3: Results -->
+            <div class="step hidden" id="resultsStep">
+                <h3>Step 3: Promotion Results</h3>
+                <div id="resultsContainer"></div>
+                <button class="button" id="startOverBtn">Start Over</button>
+            </div>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Processing...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/ladder-promotion.js"></script>
+</body>
+</html>

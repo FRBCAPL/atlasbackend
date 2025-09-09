@@ -2329,4 +2329,55 @@ router.get('/embed/:ladderName?', publicLadderEmbedHeaders, async (req, res) => 
   }
 });
 
+// Get all confirmed matches for calendar display
+router.get('/matches/confirmed', async (req, res) => {
+  try {
+    // Get all matches that are scheduled or completed
+    const matches = await LadderMatch.find({
+      status: { $in: ['scheduled', 'completed'] }
+    })
+    .populate('player1', 'firstName lastName')
+    .populate('player2', 'firstName lastName')
+    .populate('winner', 'firstName lastName')
+    .sort({ scheduledDate: 1, completedDate: 1 })
+    .lean();
+
+    // Transform matches for calendar display
+    const transformedMatches = matches.map(match => ({
+      _id: match._id,
+      player1: {
+        firstName: match.player1?.firstName,
+        lastName: match.player1?.lastName
+      },
+      player2: {
+        firstName: match.player2?.firstName,
+        lastName: match.player2?.lastName
+      },
+      winner: match.winner ? {
+        firstName: match.winner.firstName,
+        lastName: match.winner.lastName
+      } : null,
+      matchType: match.matchType,
+      status: match.status,
+      scheduledDate: match.scheduledDate,
+      completedDate: match.completedDate,
+      venue: match.venue,
+      scheduledTime: match.scheduledTime,
+      score: match.score,
+      challengeType: match.challengeType
+    }));
+
+    res.json({
+      success: true,
+      matches: transformedMatches
+    });
+  } catch (error) {
+    console.error('Error fetching confirmed matches:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch confirmed matches'
+    });
+  }
+});
+
 export default router;

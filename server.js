@@ -30,6 +30,7 @@ import apiRoutes from './src/routes/index.js';
 import Division from './src/models/Division.js';
 import unifiedAuthRoutes from './src/routes/unifiedAuth.js';
 import fargoUpdaterRoutes from './src/routes/fargoUpdater.js';
+import ladderClaimsRoutes from './src/routes/ladderClaims.js';
 
 // Import models to ensure they are registered with Mongoose
 import './src/models/LadderSignupApplication.js';
@@ -421,6 +422,9 @@ async function startServer() {
   
   // Unified authentication routes
   app.use('/api/unified-auth', unifiedAuthRoutes);
+  
+  // Ladder claims routes
+  app.use('/api/ladder-claims', ladderClaimsRoutes);
 
   // Error handling middleware (must be last)
   app.use(errorLogger);

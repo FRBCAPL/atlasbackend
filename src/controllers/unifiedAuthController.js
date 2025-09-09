@@ -5,6 +5,8 @@ import Ladder from '../models/Ladder.js';
 import User from '../models/User.js';
 import SimpleProfile from '../models/SimpleProfile.js';
 import Location from '../models/Location.js';
+import LadderPositionClaim from '../models/LadderPositionClaim.js';
+import PromotionalConfig from '../models/PromotionalConfig.js';
 import bcrypt from 'bcryptjs';
 
 // Helper function to add custom locations to the database
@@ -303,9 +305,13 @@ export const getUnifiedUserStatus = async (req, res) => {
 
 export const claimUnifiedAccount = async (req, res) => {
   try {
-    const { email, firstName, lastName, pin, phone } = req.body;
+    const { email, firstName, lastName, pin, phone, ladderName, position, fargoRate } = req.body;
 
     console.log('🔍 Consolidated claiming attempt for:', `${firstName} ${lastName} (${email || 'no email'})`);
+
+    // Check if we're in promotional period
+    const promotionalConfig = await PromotionalConfig.getCurrentConfig();
+    const isPromotionalPeriod = promotionalConfig.isPromotionalPeriod;
 
     if (!firstName || !lastName) {
       return res.status(400).json({
@@ -399,6 +405,29 @@ export const claimUnifiedAccount = async (req, res) => {
       }
     }
 
+    // If we found a ladder player, check if this position has already been claimed
+    if (ladderPlayer) {
+      const existingClaim = await LadderPositionClaim.findActiveClaim(
+        ladderPlayer.ladderName, 
+        ladderPlayer.position
+      );
+      
+      if (existingClaim) {
+        // Check if this is the same person trying to claim again
+        if (existingClaim.claimerEmail === (foundEmail || email)) {
+          return res.status(400).json({
+            success: false,
+            message: 'You have already claimed this position. Your claim is being processed.'
+          });
+        } else {
+          return res.status(400).json({
+            success: false,
+            message: `This ladder position has already been claimed by another user. Position #${ladderPlayer.position} in ${ladderPlayer.ladderName} is no longer available.`
+          });
+        }
+      }
+    }
+
     // Verify name matches for any found players
     const verifyNameMatch = (player) => {
       if (!player) return false;
@@ -461,9 +490,19 @@ export const claimUnifiedAccount = async (req, res) => {
 
     await newUnifiedUser.save();
 
-      response.scenario = 'existing_player_auto_approved';
-      response.message = 'Existing player account automatically approved and unified!';
-      response.accessGranted = true;
+      // Use promotional period status from earlier check
+      
+      if (isPromotionalPeriod) {
+        response.scenario = 'existing_player_pending_approval';
+        response.message = 'Your claim has been submitted and is pending admin approval. You will be notified once approved.';
+        response.accessGranted = false;
+        response.requiresApproval = true;
+      } else {
+        response.scenario = 'existing_player_auto_approved';
+        response.message = 'Existing player account automatically approved and unified!';
+        response.accessGranted = true;
+        response.requiresApproval = false;
+      }
       response.user = {
         _id: newUnifiedUser._id,
         firstName: newUnifiedUser.firstName,
@@ -492,10 +531,67 @@ export const claimUnifiedAccount = async (req, res) => {
           ladderName: ladderPlayer.ladderName,
           isActive: ladderPlayer.isActive
         };
+
+        // Use promotional period status from earlier check
+        
+        // Create a claim record to prevent duplicate claims
+        const claimRecord = new LadderPositionClaim({
+          ladderName: ladderPlayer.ladderName,
+          position: ladderPlayer.position,
+          playerName: `${ladderPlayer.firstName} ${ladderPlayer.lastName}`,
+          claimerEmail: finalEmail,
+          claimerName: `${firstName} ${lastName}`,
+          status: isPromotionalPeriod ? 'pending' : 'completed', // Require approval during promo period
+          claimData: {
+            fargoRate: ladderPlayer.fargoRate?.toString() || '',
+            phone: phone || '',
+            message: isPromotionalPeriod ? 'Claim requires admin approval during promotional period' : 'Existing player auto-approved'
+          },
+          approvedBy: isPromotionalPeriod ? null : 'system',
+          approvedAt: isPromotionalPeriod ? null : new Date()
+        });
+
+        await claimRecord.save();
+        console.log(`📝 Created ${isPromotionalPeriod ? 'pending' : 'completed'} claim record for ${firstName} ${lastName} claiming position #${ladderPlayer.position} in ${ladderPlayer.ladderName}`);
       }
 
     } else if (email) {
       // SCENARIO 2: New user with email - Create pending account requiring admin approval
+
+      // If they're claiming a specific ladder position, check if this person has already claimed it
+      if (ladderName && position) {
+        const existingClaim = await LadderPositionClaim.findOne({
+          ladderName,
+          position,
+          claimerEmail: email,
+          status: { $in: ['pending', 'approved'] }
+        });
+        
+        if (existingClaim) {
+          return res.status(400).json({
+            success: false,
+            message: 'You have already claimed this position. Your claim is being processed.'
+          });
+        }
+
+        // Create a pending claim record (multiple people can claim the same position)
+        const claimRecord = new LadderPositionClaim({
+          ladderName,
+          position,
+          playerName: `${firstName} ${lastName}`,
+          claimerEmail: email,
+          claimerName: `${firstName} ${lastName}`,
+          status: 'pending',
+          claimData: {
+            fargoRate: fargoRate || '',
+            phone: phone || '',
+            message: 'New user claiming ladder position - requires admin approval'
+          }
+        });
+
+        await claimRecord.save();
+        console.log(`📝 Created pending claim record for ${firstName} ${lastName} claiming position #${position} in ${ladderName}`);
+      }
 
       const newUnifiedUser = new UnifiedUser({
         firstName: firstName,

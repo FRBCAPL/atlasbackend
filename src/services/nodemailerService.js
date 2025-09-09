@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer';
 
 // Create transporter using Gmail
 const createTransporter = () => {
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     service: 'gmail',
     auth: {
       user: process.env.GMAIL_USER, // Your Gmail address
@@ -263,6 +263,145 @@ export const sendChallengeConfirmationEmail = async (emailData) => {
     
   } catch (error) {
     console.error('Error sending challenge confirmation email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Send counter-proposal email to challenger
+export const sendCounterProposalEmail = async (emailData) => {
+  try {
+    const transporter = createTransporter();
+    
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Counter-Proposal Received</title>
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4; }
+            .container { background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+            .header { text-align: center; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+            .header h1 { margin: 0; font-size: 24px; }
+            .original-challenge { background-color: #ffebee; padding: 20px; border-radius: 8px; border-left: 4px solid #f44336; margin: 20px 0; }
+            .counter-proposal { background-color: #e8f5e8; padding: 20px; border-radius: 8px; border-left: 4px solid #4caf50; margin: 20px 0; }
+            .section-title { font-weight: bold; color: #333; margin-bottom: 15px; font-size: 18px; }
+            .detail-row { display: flex; justify-content: space-between; margin-bottom: 8px; padding: 5px 0; }
+            .detail-label { font-weight: bold; color: #555; }
+            .detail-value { color: #333; }
+            .dates-list { background-color: #f0f8ff; padding: 15px; border-radius: 8px; border: 2px solid #2196f3; margin: 15px 0; }
+            .dates-list h4 { color: #1976d2; margin: 0 0 10px 0; }
+            .date-item { background-color: white; padding: 8px; margin: 5px 0; border-radius: 4px; border: 1px solid #e0e0e0; }
+            .message-box { background-color: #fff3e0; border: 1px solid #ffb74d; padding: 15px; border-radius: 8px; margin: 20px 0; }
+            .cta-button { display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 14px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🔄 Counter-Proposal Received!</h1>
+                <p>${emailData.from_name} has submitted a counter-proposal to your challenge</p>
+            </div>
+            
+            <div class="original-challenge">
+                <div class="section-title">📋 Your Original Challenge</div>
+                <div class="detail-row">
+                    <span class="detail-label">Challenge Type:</span>
+                    <span class="detail-value">${emailData.original_challenge_type.charAt(0).toUpperCase() + emailData.original_challenge_type.slice(1)} Match</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Entry Fee:</span>
+                    <span class="detail-value">$${emailData.original_entry_fee}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Race Length:</span>
+                    <span class="detail-value">Race to ${emailData.original_race_length}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Game Type:</span>
+                    <span class="detail-value">${emailData.original_game_type}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Location:</span>
+                    <span class="detail-value">${emailData.original_location}</span>
+                </div>
+            </div>
+            
+            <div class="counter-proposal">
+                <div class="section-title">🔄 Counter-Proposal from ${emailData.from_name}</div>
+                <div class="detail-row">
+                    <span class="detail-label">Entry Fee:</span>
+                    <span class="detail-value">$${emailData.counter_entry_fee}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Race Length:</span>
+                    <span class="detail-value">Race to ${emailData.counter_race_length}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Game Type:</span>
+                    <span class="detail-value">${emailData.counter_game_type}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Location:</span>
+                    <span class="detail-value">${emailData.counter_location}</span>
+                </div>
+                
+                ${emailData.counter_dates && emailData.counter_dates.length > 0 ? `
+                <div class="dates-list">
+                    <h4>📅 Preferred Dates</h4>
+                    ${emailData.counter_dates.map(date => `
+                        <div class="date-item">
+                            ${new Date(date).toLocaleDateString('en-US', { 
+                                weekday: 'long', 
+                                year: 'numeric', 
+                                month: 'long', 
+                                day: 'numeric' 
+                            })}
+                        </div>
+                    `).join('')}
+                </div>
+                ` : ''}
+                
+                ${emailData.counter_note ? `
+                <div class="message-box">
+                    <strong>💬 Message from ${emailData.from_name}:</strong><br>
+                    ${emailData.counter_note}
+                </div>
+                ` : ''}
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="https://newapp-1-ic1v.onrender.com/ladder" class="cta-button">
+                    View Counter-Proposal in App
+                </a>
+            </div>
+            
+            <div class="footer">
+                <p>This is an automated message from the Front Range Pool Hub Ladder System.</p>
+                <p>Please respond to the counter-proposal through the app.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    const mailOptions = {
+      from: `"The Pool Hub" <admin@frontrangepool.com>`,
+      to: emailData.to_email,
+      subject: `🔄 Counter-Proposal from ${emailData.from_name}`,
+      html: htmlContent
+    };
+
+    const result = await transporter.sendMail(mailOptions);
+    console.log('📧 Counter-proposal email sent successfully!');
+    console.log('📧 Message ID:', result.messageId);
+    
+    return { success: true, messageId: result.messageId };
+    
+  } catch (error) {
+    console.error('Error sending counter-proposal email:', error);
     return { success: false, error: error.message };
   }
 };

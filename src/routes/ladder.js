@@ -780,6 +780,77 @@ router.post('/challenge/:challengeId/accept', async (req, res) => {
   }
 });
 
+// Decline a challenge
+router.post('/challenge/:challengeId/decline', async (req, res) => {
+  try {
+    const { challengeId } = req.params;
+    const { note } = req.body;
+    
+    const challenge = await LadderChallenge.findById(challengeId)
+      .populate('challenger defender');
+    
+    if (!challenge) {
+      return res.status(404).json({ error: 'Challenge not found' });
+    }
+    
+    if (challenge.status !== 'pending') {
+      return res.status(400).json({ error: 'Challenge cannot be declined' });
+    }
+    
+    challenge.status = 'declined';
+    challenge.declinedAt = new Date();
+    challenge.declineNote = note;
+    
+    await challenge.save();
+    
+    res.json({ success: true, message: 'Challenge declined successfully', challenge });
+  } catch (error) {
+    console.error('Error declining challenge:', error);
+    res.status(500).json({ error: 'Failed to decline challenge' });
+  }
+});
+
+// Submit a counter-proposal
+router.post('/challenge/:challengeId/counter-proposal', async (req, res) => {
+  try {
+    const { challengeId } = req.params;
+    const { counterProposal } = req.body;
+    
+    const challenge = await LadderChallenge.findById(challengeId)
+      .populate('challenger defender');
+    
+    if (!challenge) {
+      return res.status(404).json({ error: 'Challenge not found' });
+    }
+    
+    if (challenge.status !== 'pending') {
+      return res.status(400).json({ error: 'Challenge cannot be counter-proposed' });
+    }
+    
+    // Store the counter-proposal
+    challenge.counterProposal = {
+      entryFee: counterProposal.entryFee,
+      raceLength: counterProposal.raceLength,
+      gameType: counterProposal.gameType,
+      tableSize: counterProposal.tableSize,
+      location: counterProposal.location,
+      preferredDates: counterProposal.preferredDates,
+      note: counterProposal.note,
+      submittedAt: new Date(),
+      submittedBy: challenge.defender._id
+    };
+    
+    challenge.status = 'counter-proposed';
+    
+    await challenge.save();
+    
+    res.json({ success: true, message: 'Counter-proposal submitted successfully', challenge });
+  } catch (error) {
+    console.error('Error submitting counter-proposal:', error);
+    res.status(500).json({ error: 'Failed to submit counter-proposal' });
+  }
+});
+
 // Get recent matches
 router.get('/matches/recent', async (req, res) => {
   try {

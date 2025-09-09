@@ -1,5 +1,5 @@
 import express from 'express';
-import { sendChallengeConfirmationEmail, sendChallengeNotificationEmail } from '../services/nodemailerService.js';
+import { sendChallengeConfirmationEmail, sendChallengeNotificationEmail, sendCounterProposalEmail } from '../services/nodemailerService.js';
 
 const router = express.Router();
 
@@ -65,6 +65,39 @@ router.post('/send-challenge-notification', async (req, res) => {
     
   } catch (error) {
     console.error('Error in challenge notification email route:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Send counter-proposal email
+router.post('/send-counter-proposal', async (req, res) => {
+  try {
+    const emailData = req.body;
+    
+    // Validate required fields
+    if (!emailData.to_email || !emailData.to_name || !emailData.from_name) {
+      return res.status(400).json({ 
+        error: 'Missing required email fields: to_email, to_name, from_name' 
+      });
+    }
+    
+    const result = await sendCounterProposalEmail(emailData);
+    
+    if (result.success) {
+      res.json({ 
+        success: true, 
+        message: 'Counter-proposal email sent successfully',
+        messageId: result.messageId 
+      });
+    } else {
+      res.status(500).json({ 
+        error: 'Failed to send email', 
+        details: result.error 
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error in counter-proposal email route:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

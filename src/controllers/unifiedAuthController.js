@@ -213,16 +213,40 @@ export const getUnifiedUserStatus = async (req, res) => {
 
     // Get profiles
     const leagueProfile = await LeagueProfile.findOne({ userId: unifiedUser._id });
-     const ladderPlayer = await LadderPlayer.findOne({ 
-       firstName: unifiedUser.firstName, 
-       lastName: unifiedUser.lastName
-     });
+    
+    // Try to find ladder player by multiple methods
+    let ladderPlayer = await LadderPlayer.findOne({ 
+      firstName: unifiedUser.firstName, 
+      lastName: unifiedUser.lastName
+    });
+    
+    // If not found by name, try by email (some ladder players might have email stored)
+    if (!ladderPlayer) {
+      ladderPlayer = await LadderPlayer.findOne({ 
+        email: { $regex: new RegExp(`^${email}$`, 'i') }
+      });
+    }
+    
+    // If still not found, try by unified user ID (if there's a reference)
+    if (!ladderPlayer) {
+      ladderPlayer = await LadderPlayer.findOne({ 
+        userId: unifiedUser._id
+      });
+    }
+    
+    // Special case: If this is the guest user and we can't find a ladder player,
+    // we'll return a generic response that allows the frontend to handle position claiming
+    if (!ladderPlayer && email === 'guest@frontrangepool.com') {
+      // For guest user, we'll let the frontend handle the position claiming process
+      // and not try to force a ladder player match
+    }
 
     const response = {
       success: true,
       isUnifiedUser: true,
       isLeaguePlayer: !!leagueProfile,
-       isLadderPlayer: !!ladderPlayer,
+      isLadderPlayer: !!ladderPlayer,
+      existingUser: true,
       user: {
         firstName: unifiedUser.firstName,
         lastName: unifiedUser.lastName,
@@ -235,7 +259,9 @@ export const getUnifiedUserStatus = async (req, res) => {
 
     // Add league data if available
     if (leagueProfile) {
-      response.leagueData = {
+      response.leagueInfo = {
+        firstName: unifiedUser.firstName,
+        lastName: unifiedUser.lastName,
         division: leagueProfile.division,
         divisions: leagueProfile.divisions,
         totalMatches: leagueProfile.totalMatches,
@@ -246,15 +272,22 @@ export const getUnifiedUserStatus = async (req, res) => {
     }
 
     // Add ladder data if available
-     if (ladderPlayer) {
-      response.ladderData = {
-         ladderName: ladderPlayer.ladderName,
-         position: ladderPlayer.position,
-         fargoRate: ladderPlayer.fargoRate,
-         totalMatches: ladderPlayer.totalMatches,
-         wins: ladderPlayer.wins,
-         losses: ladderPlayer.losses
+    if (ladderPlayer) {
+      response.ladderInfo = {
+        firstName: ladderPlayer.firstName,
+        lastName: ladderPlayer.lastName,
+        ladderName: ladderPlayer.ladderName,
+        position: ladderPlayer.position,
+        fargoRate: ladderPlayer.fargoRate,
+        totalMatches: ladderPlayer.totalMatches,
+        wins: ladderPlayer.wins,
+        losses: ladderPlayer.losses
       };
+    } else if (email === 'guest@frontrangepool.com') {
+      // Special handling for guest user - they might be claiming a position
+      // We'll return a flag to indicate they can claim positions
+      response.canClaimPosition = true;
+      response.guestUser = true;
     }
 
     res.json(response);

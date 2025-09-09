@@ -1107,13 +1107,21 @@ router.post('/match-fee', async (req, res) => {
       });
     }
     
-    // Get current prize pool
-    let prizePool = await PrizePool.getCurrentPrizePool();
+    // Get promotional configuration
+    const PromotionalConfig = (await import('../models/PromotionalConfig.js')).default;
+    const currentPricing = await PromotionalConfig.getCurrentPricing();
+    const shouldContributeToPrizePool = await PromotionalConfig.shouldContributeToPrizePool();
     
-    if (!prizePool) {
-      // Create new prize pool if none exists
-      prizePool = await PrizePool.createNewPeriod('quarterly');
-      await prizePool.save();
+    // Get current prize pool (only if we should contribute to it)
+    let prizePool = null;
+    if (shouldContributeToPrizePool) {
+      prizePool = await PrizePool.getCurrentPrizePool();
+      
+      if (!prizePool) {
+        // Create new prize pool if none exists
+        prizePool = await PrizePool.createNewPeriod('quarterly');
+        await prizePool.save();
+      }
     }
     
     // Get player info
@@ -1125,17 +1133,19 @@ router.post('/match-fee', async (req, res) => {
       });
     }
     
-    // Calculate fee distribution
-    const prizePoolContribution = 3; // Fixed $3 to prize pool per match
-    const platformRevenue = amount - prizePoolContribution;
+    // Calculate fee distribution based on current pricing
+    const prizePoolContribution = shouldContributeToPrizePool ? currentPricing.prizePoolContribution : 0;
+    const platformRevenue = currentPricing.platformRevenue;
     
-    // Add to prize pool
-    await prizePool.addMatchContribution({
-      matchId,
-      amount: prizePoolContribution,
-      playerId,
-      playerName: `${player.firstName} ${player.lastName}`
-    });
+    // Add to prize pool (only if we should contribute)
+    if (shouldContributeToPrizePool && prizePoolContribution > 0) {
+      await prizePool.addMatchContribution({
+        matchId,
+        amount: prizePoolContribution,
+        playerId,
+        playerName: `${player.firstName} ${player.lastName}`
+      });
+    }
     
     // Record payment in membership
     await membership.addPayment({
@@ -1145,7 +1155,10 @@ router.post('/match-fee', async (req, res) => {
       description: `Match fee for match ${matchId}`
     });
     
-    res.json({
+    // Get promotional message
+    const promotionalMessage = await PromotionalConfig.getPromotionalMessage();
+    
+    const response = {
       success: true,
       message: 'Match fee processed successfully',
       payment: {
@@ -1155,16 +1168,68 @@ router.post('/match-fee', async (req, res) => {
         matchId,
         playerId
       },
-      prizePool: {
+      promotional: {
+        isPromotionalPeriod: await PromotionalConfig.isPromotionalPeriod(),
+        message: promotionalMessage
+      }
+    };
+    
+    // Add prize pool info only if it exists
+    if (prizePool) {
+      response.prizePool = {
         currentBalance: prizePool.currentBalance,
         periodName: prizePool.periodName
-      }
-    });
+      };
+    }
+    
+    res.json(response);
     
   } catch (error) {
     console.error('Error processing match fee:', error);
     res.status(500).json({
       error: 'Failed to process match fee',
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// PROMOTIONAL CONFIGURATION
+// ============================================================================
+
+/**
+ * Get current promotional configuration
+ * GET /api/monetization/promotional-config
+ */
+router.get('/promotional-config', async (req, res) => {
+  try {
+    const PromotionalConfig = (await import('../models/PromotionalConfig.js')).default;
+    
+    const config = await PromotionalConfig.getCurrentConfig();
+    const isPromotional = await PromotionalConfig.isPromotionalPeriod();
+    const currentPricing = await PromotionalConfig.getCurrentPricing();
+    const shouldContributeToPrizePool = await PromotionalConfig.shouldContributeToPrizePool();
+    const promotionalMessage = await PromotionalConfig.getPromotionalMessage();
+    
+    res.json({
+      success: true,
+      config: {
+        isPromotionalPeriod: isPromotional,
+        promotionalStartDate: config.promotionalStartDate,
+        promotionalEndDate: config.promotionalEndDate,
+        prizePoolStartDate: config.prizePoolStartDate,
+        currentPricing,
+        shouldContributeToPrizePool,
+        promotionalMessage,
+        daysUntilPromotionEnds: config.getDaysUntilPromotionEnds(),
+        daysUntilPrizePoolStarts: config.getDaysUntilPrizePoolStarts()
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error fetching promotional config:', error);
+    res.status(500).json({
+      error: 'Failed to fetch promotional configuration',
       message: error.message
     });
   }

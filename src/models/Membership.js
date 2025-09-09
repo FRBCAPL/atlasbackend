@@ -39,6 +39,17 @@ const membershipSchema = new mongoose.Schema({
     default: 5.00 // Basic membership price
   },
   
+  // Promotional period tracking
+  isPromotionalMembership: {
+    type: Boolean,
+    default: false
+  },
+  
+  promotionalPeriodEnds: {
+    type: Date,
+    default: new Date('2025-10-01T00:00:00.000Z')
+  },
+  
   // Dates
   startDate: {
     type: Date,
@@ -145,9 +156,28 @@ membershipSchema.statics.findActiveMemberships = function() {
     status: 'active',
     $or: [
       { nextBillingDate: { $gt: new Date() } },
-      { isTrialActive: true, trialEndsAt: { $gt: new Date() } }
+      { isTrialActive: true, trialEndsAt: { $gt: new Date() } },
+      { isPromotionalMembership: true, promotionalPeriodEnds: { $gt: new Date() } }
     ]
   }).populate('playerId');
+};
+
+membershipSchema.statics.createPromotionalMembership = async function(playerId, tier = 'basic') {
+  const PromotionalConfig = (await import('./PromotionalConfig.js')).default;
+  const config = await PromotionalConfig.getCurrentConfig();
+  
+  const membership = new this({
+    playerId,
+    tier,
+    status: 'active',
+    amount: 0, // Free during promotional period
+    isPromotionalMembership: true,
+    promotionalPeriodEnds: config.promotionalEndDate,
+    nextBillingDate: config.promotionalEndDate, // Will need to pay when promotion ends
+    startDate: new Date()
+  });
+  
+  return membership;
 };
 
 membershipSchema.statics.findExpiringMemberships = function(days = 7) {
@@ -230,6 +260,25 @@ membershipSchema.methods.addPayment = function(paymentData) {
     description: paymentData.description
   });
   return this.save();
+};
+
+membershipSchema.methods.isPromotionalActive = function() {
+  if (!this.isPromotionalMembership) return false;
+  return new Date() < this.promotionalPeriodEnds;
+};
+
+membershipSchema.methods.getEffectiveAmount = async function() {
+  if (this.isPromotionalActive()) {
+    return 0; // Free during promotional period
+  }
+  return this.amount;
+};
+
+membershipSchema.methods.getDaysUntilPromotionEnds = function() {
+  if (!this.isPromotionalMembership) return 0;
+  const now = new Date();
+  if (now >= this.promotionalPeriodEnds) return 0;
+  return Math.ceil((this.promotionalPeriodEnds - now) / (1000 * 60 * 60 * 24));
 };
 
 // Virtual for membership duration

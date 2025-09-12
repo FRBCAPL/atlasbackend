@@ -182,7 +182,7 @@ router.get('/ladders/:ladderName/players', async (req, res) => {
         lastMatch = {
           result: isWinner ? 'W' : 'L',
           opponent: `${opponent.firstName} ${opponent.lastName}`,
-          date: recentMatch.completedDate || recentMatch.createdAt,
+          date: recentMatch.scheduledDate || recentMatch.completedDate,
           venue: recentMatch.venue,
           matchType: recentMatch.matchType,
           score: recentMatch.score,
@@ -950,7 +950,7 @@ router.get('/player/:email/matches', async (req, res) => {
         score: match.score || 'N/A',
         matchType: match.matchType,
         playerRole: isPlayer1 ? 'challenger' : 'defender',
-        matchDate: match.completedDate || match.scheduledDate,
+        matchDate: match.scheduledDate || match.completedDate,
         location: match.venue || null,
         positionBefore: isPlayer1 ? match.player1OldPosition : match.player2OldPosition,
         positionAfter: isPlayer1 ? match.player1NewPosition : match.player2NewPosition
@@ -996,7 +996,7 @@ router.get('/matches/last-match/:email', async (req, res) => {
       score: lastMatch.score || 'N/A',
       matchType: lastMatch.matchType,
       playerRole: isPlayer1 ? 'challenger' : 'defender',
-      matchDate: lastMatch.completedDate || lastMatch.scheduledDate,
+      matchDate: lastMatch.scheduledDate || lastMatch.completedDate,
       location: lastMatch.venue || null,
       positionBefore: isPlayer1 ? lastMatch.player1OldPosition : lastMatch.player2OldPosition,
       positionAfter: isPlayer1 ? lastMatch.player1NewPosition : lastMatch.player2NewPosition

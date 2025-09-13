@@ -1,5 +1,6 @@
 import express from 'express';
 import PaymentConfig from '../models/PaymentConfig.js';
+import PromotionalConfig from '../models/PromotionalConfig.js';
 
 const router = express.Router();
 
@@ -12,6 +13,14 @@ router.get('/test', (req, res) => {
 router.get('/', async (req, res) => {
   try {
     let config = await PaymentConfig.findOne({ leagueId: 'default' });
+    
+    // Get promotional config
+    let promotionalConfig = null;
+    try {
+      promotionalConfig = await PromotionalConfig.getCurrentConfig();
+    } catch (error) {
+      console.log('No promotional config found or error loading:', error.message);
+    }
     
     // Create default config if none exists
     if (!config) {
@@ -92,7 +101,8 @@ router.get('/', async (req, res) => {
     
     res.json({
       success: true,
-      config
+      config,
+      promotionalMessage: promotionalConfig?.promotionalMessage || null
     });
   } catch (error) {
     console.error('Error fetching payment config:', error);

@@ -1,5 +1,6 @@
 import Match from '../models/Match.js';
 import Proposal from '../models/Proposal.js';
+import LadderMatch from '../models/LadderMatch.js';
 
 // Get all matches for a division
 export const getMatches = async (req, res) => {
@@ -188,5 +189,121 @@ export const getMatchStats = async (req, res) => {
   } catch (err) {
     console.error('Error fetching match stats:', err);
     res.status(500).json({ error: 'Failed to fetch match statistics' });
+  }
+};
+
+// Get head-to-head record between two players
+export const getHeadToHeadRecord = async (req, res) => {
+  try {
+    const { player1Id, player2Id } = req.params;
+    
+    if (!player1Id || !player2Id) {
+      return res.status(400).json({ error: 'Both player IDs are required' });
+    }
+    
+    // Query all match collections for head-to-head records
+    const [generalMatches, ladderMatches, proposalMatches] = await Promise.all([
+      // General matches
+      Match.find({
+        status: 'completed',
+        $or: [
+          { player1Id: player1Id, player2Id: player2Id },
+          { player1Id: player2Id, player2Id: player1Id }
+        ]
+      }).sort({ completedDate: -1 }),
+      
+      // Ladder matches
+      LadderMatch.find({
+        status: 'completed',
+        $or: [
+          { player1: player1Id, player2: player2Id },
+          { player1: player2Id, player2: player1Id }
+        ]
+      }).populate('player1 player2', 'firstName lastName email').sort({ completedDate: -1 }),
+      
+      // Proposal matches with results
+      Proposal.find({
+        'matchResult.completed': true,
+        $or: [
+          { sender: player1Id, receiver: player2Id },
+          { sender: player2Id, receiver: player1Id }
+        ]
+      }).sort({ 'matchResult.completedAt': -1 })
+    ]);
+    
+    // Combine all matches
+    const allMatches = [
+      ...generalMatches.map(match => ({
+        id: match._id,
+        date: match.completedDate,
+        winner: match.winner,
+        loser: match.loser,
+        score: match.score,
+        type: 'general'
+      })),
+      ...ladderMatches.map(match => ({
+        id: match._id,
+        date: match.completedDate,
+        winner: match.winner?.email || match.winner,
+        loser: match.loser?.email || match.loser,
+        score: match.score,
+        type: 'ladder'
+      })),
+      ...proposalMatches.map(proposal => ({
+        id: proposal._id,
+        date: proposal.matchResult.completedAt,
+        winner: proposal.matchResult.winner,
+        loser: proposal.matchResult.loser,
+        score: proposal.matchResult.score,
+        type: 'proposal'
+      }))
+    ];
+    
+    // Sort by date (most recent first)
+    allMatches.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    // Calculate head-to-head record
+    let player1Wins = 0;
+    let player2Wins = 0;
+    let lastMatch = null;
+    
+    allMatches.forEach(match => {
+      if (match.winner === player1Id || match.winner === player1Id) {
+        player1Wins++;
+      } else if (match.winner === player2Id || match.winner === player2Id) {
+        player2Wins++;
+      }
+      
+      // Track the most recent match
+      if (!lastMatch || new Date(match.date) > new Date(lastMatch.date)) {
+        lastMatch = match;
+      }
+    });
+    
+    const totalMatches = player1Wins + player2Wins;
+    
+    res.json({
+      player1Id,
+      player2Id,
+      record: {
+        player1Wins,
+        player2Wins,
+        totalMatches,
+        player1WinRate: totalMatches > 0 ? Math.round((player1Wins / totalMatches) * 100) : 0,
+        player2WinRate: totalMatches > 0 ? Math.round((player2Wins / totalMatches) * 100) : 0
+      },
+      lastMatch: lastMatch ? {
+        date: lastMatch.date,
+        winner: lastMatch.winner,
+        loser: lastMatch.loser,
+        score: lastMatch.score,
+        type: lastMatch.type
+      } : null,
+      allMatches: allMatches.slice(0, 10) // Return last 10 matches for context
+    });
+    
+  } catch (err) {
+    console.error('Error fetching head-to-head record:', err);
+    res.status(500).json({ error: 'Failed to fetch head-to-head record' });
   }
 }; 

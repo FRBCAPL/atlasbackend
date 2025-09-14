@@ -24,4 +24,7 @@ router.patch('/:id/cancel', matchController.cancelMatch);
 // Get match statistics
 router.get('/stats/:division', matchController.getMatchStats);
 
+// Get head-to-head record between two players
+router.get('/head-to-head/:player1Id/:player2Id', matchController.getHeadToHeadRecord);
+
 export default router; 

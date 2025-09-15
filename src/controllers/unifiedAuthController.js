@@ -396,11 +396,13 @@ export const claimUnifiedAccount = async (req, res) => {
       });
 
       if (leaguePlayer) {
-        foundEmail = leaguePlayer.email;
+        // Only use stored email if no email was provided by user
+        foundEmail = email || leaguePlayer.email;
 
       }
       if (ladderPlayer) {
-        foundEmail = ladderPlayer.email || foundEmail;
+        // Only use stored email if no email was provided by user
+        foundEmail = email || ladderPlayer.email || foundEmail;
 
       }
     }
@@ -463,7 +465,8 @@ export const claimUnifiedAccount = async (req, res) => {
     if (leaguePlayer || ladderPlayer) {
       // SCENARIO 1: Existing player found - Auto-approve and create unified account
 
-      const finalEmail = foundEmail || email;
+      // Always use the email provided by the user, not the stored email
+      const finalEmail = email || foundEmail;
       if (!finalEmail) {
         return res.status(400).json({
           success: false,
@@ -553,6 +556,14 @@ export const claimUnifiedAccount = async (req, res) => {
 
         await claimRecord.save();
         console.log(`📝 Created ${isPromotionalPeriod ? 'pending' : 'completed'} claim record for ${firstName} ${lastName} claiming position #${ladderPlayer.position} in ${ladderPlayer.ladderName}`);
+
+        // CRITICAL FIX: Update the ladder player's email to match the unified account
+        const oldEmail = ladderPlayer.email;
+        if (oldEmail !== finalEmail) {
+          ladderPlayer.email = finalEmail;
+          await ladderPlayer.save();
+          console.log(`✅ Updated ladder player email from ${oldEmail} to ${finalEmail}`);
+        }
       }
 
     } else if (email) {

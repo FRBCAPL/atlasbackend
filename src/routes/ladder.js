@@ -522,6 +522,7 @@ router.post('/challenge', async (req, res) => {
       gameType, 
       tableSize, 
       preferredDates,
+      preferredTimes,
       postContent 
     } = req.body;
     
@@ -590,7 +591,8 @@ router.post('/challenge', async (req, res) => {
         raceLength,
         gameType,
         tableSize,
-        preferredDates
+        preferredDates,
+        preferredTimes: preferredTimes || {}
       },
       challengePost: {
         postContent
@@ -631,12 +633,21 @@ router.post('/challenge', async (req, res) => {
           game_type: gameType,
           table_size: tableSize,
           location: 'Legends Brews & Cues', // Default location
-          preferred_dates: preferredDates ? preferredDates.map(date => new Date(date).toLocaleDateString('en-US', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          })).join(', ') : 'To be discussed',
+          preferred_dates: preferredDates ? preferredDates.map(date => {
+            const dateStr = new Date(date).toLocaleDateString('en-US', { 
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            });
+            const time = preferredTimes && preferredTimes[date] ? 
+              new Date(`2000-01-01T${preferredTimes[date]}`).toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit',
+                hour12: true 
+              }) : '';
+            return time ? `${dateStr} at ${time}` : dateStr;
+          }).join(', ') : 'To be discussed',
           challenge_message: postContent,
           challenger_position: challenger.position,
           defender_position: defender.position,
@@ -909,26 +920,38 @@ router.patch('/matches/:id/complete', async (req, res) => {
   }
 });
 
-// Get matches for a player
-router.get('/player/:email/matches', async (req, res) => {
+// Get matches for a player by ID
+router.get('/player/:identifier/matches', async (req, res) => {
   try {
-    const { email } = req.params;
+    const { identifier } = req.params;
     const { limit = 10 } = req.query;
     
-    // First try to find player by email
-    let player = await LadderPlayer.getPlayerByEmail(email);
+    let player = null;
     
-    // If not found by email, try to find by name (for players without email in ladder system)
-    if (!player) {
-      // Check if there's a league player with this email
-      const leaguePlayer = await User.findOne({ email: email.toLowerCase() });
-      if (leaguePlayer) {
-        // Try to find ladder player by name
-        player = await LadderPlayer.findOne({
-          firstName: { $regex: new RegExp(`^${leaguePlayer.firstName}$`, 'i') },
-          lastName: { $regex: new RegExp(`^${leaguePlayer.lastName}$`, 'i') },
-          isActive: true
-        });
+    // Try to find by email first
+    if (identifier.includes('@')) {
+      player = await LadderPlayer.getPlayerByEmail(identifier);
+      
+      // If not found by email, try to find by name (for players without email in ladder system)
+      if (!player) {
+        // Check if there's a league player with this email
+        const leaguePlayer = await User.findOne({ email: identifier.toLowerCase() });
+        if (leaguePlayer) {
+          // Try to find ladder player by name
+          player = await LadderPlayer.findOne({
+            firstName: { $regex: new RegExp(`^${leaguePlayer.firstName}$`, 'i') },
+            lastName: { $regex: new RegExp(`^${leaguePlayer.lastName}$`, 'i') },
+            isActive: true
+          });
+        }
+      }
+    } else {
+      // Try to find by ID
+      try {
+        player = await LadderPlayer.findById(identifier);
+      } catch (error) {
+        // If ID is invalid, try as email anyway
+        player = await LadderPlayer.getPlayerByEmail(identifier);
       }
     }
     
@@ -1840,10 +1863,23 @@ router.get('/player-status/:email', async (req, res) => {
     // Check if player exists in league database
     const leaguePlayer = await User.findOne({ email: email.toLowerCase() });
     
-    // Check if player exists in ladder database (by email OR by name if league player exists)
-    let ladderPlayer = await LadderPlayer.findOne({ email: email.toLowerCase() });
+    // Check if player exists in unified user database first
+    const unifiedUser = await UnifiedUser.findOne({ 
+      email: { $regex: new RegExp(`^${email}$`, 'i') }
+    });
     
-    // If no ladder player found by email but league player exists, try to find by name
+    // Check if player exists in ladder database
+    let ladderPlayer = null;
+    
+    // If we have a unified user, try to find ladder player by name
+    if (unifiedUser) {
+      ladderPlayer = await LadderPlayer.findOne({
+        firstName: { $regex: new RegExp(`^${unifiedUser.firstName}$`, 'i') },
+        lastName: { $regex: new RegExp(`^${unifiedUser.lastName}$`, 'i') }
+      });
+    }
+    
+    // If no ladder player found by unified user name but league player exists, try to find by league player name
     if (!ladderPlayer && leaguePlayer) {
       ladderPlayer = await LadderPlayer.findOne({
         firstName: { $regex: new RegExp(`^${leaguePlayer.firstName}$`, 'i') },

@@ -57,6 +57,11 @@ const ladderChallengeSchema = new mongoose.Schema({
     preferredDates: [{
       type: Date
     }],
+    preferredTimes: {
+      type: Map,
+      of: String,
+      default: {}
+    },
     agreedDate: {
       type: Date,
       default: null

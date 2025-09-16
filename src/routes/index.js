@@ -32,6 +32,9 @@ import monetizationRoutes from './monetization.js';
 // Email routes
 import emailRoutes from './email.js';
 
+// Dues Tracker routes
+import duesTrackerRoutes from './duesTracker.js';
+
 
 const router = express.Router();
 
@@ -64,6 +67,9 @@ router.use('/monetization', monetizationRoutes);
 
 // Email routes
 router.use('/email', emailRoutes);
+
+// Dues Tracker routes
+router.use('/dues-tracker', duesTrackerRoutes);
 
 
 // Simple test route

@@ -500,12 +500,37 @@ export const claimUnifiedAccount = async (req, res) => {
         });
       }
 
+      // Generate a random 4-digit PIN for existing players
+      const generateRandomPin = () => {
+        return Math.floor(1000 + Math.random() * 9000).toString();
+      };
+
+      // Ensure PIN is unique
+      let pin;
+      let isPinUnique = false;
+      let attempts = 0;
+      const maxAttempts = 10;
+
+      while (!isPinUnique && attempts < maxAttempts) {
+        pin = generateRandomPin();
+        const existingPinUser = await UnifiedUser.findOne({ pin });
+        if (!existingPinUser) {
+          isPinUnique = true;
+        }
+        attempts++;
+      }
+
+      // If we couldn't generate a unique PIN after max attempts, use a timestamp-based PIN
+      if (!isPinUnique) {
+        pin = Date.now().toString().slice(-4);
+      }
+
       // Create unified account for existing player
     const newUnifiedUser = new UnifiedUser({
       firstName: firstName,
       lastName: lastName,
         email: finalEmail.toLowerCase(),
-      pin: `${firstName}${lastName}`, // Default PIN
+      pin: pin, // Random 4-digit PIN
         phone: phone || leaguePlayer?.phone || '',
       isActive: true,
         isApproved: true, // Auto-approve existing players
@@ -589,6 +614,21 @@ export const claimUnifiedAccount = async (req, res) => {
           ladderPlayer.email = finalEmail;
           await ladderPlayer.save();
           console.log(`✅ Updated ladder player email from ${oldEmail} to ${finalEmail}`);
+        }
+      } else {
+        // If no ladderPlayer was found by email, try to find by name and update email
+        const ladderPlayerByName = await LadderPlayer.findOne({
+          firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+          lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+        });
+
+        if (ladderPlayerByName) {
+          const oldEmail = ladderPlayerByName.email;
+          if (oldEmail !== finalEmail) {
+            ladderPlayerByName.email = finalEmail;
+            await ladderPlayerByName.save();
+            console.log(`✅ Updated ladder player (found by name) email from ${oldEmail} to ${finalEmail}`);
+          }
         }
       }
 

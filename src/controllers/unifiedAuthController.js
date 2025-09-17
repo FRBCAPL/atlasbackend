@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import UnifiedUser from '../models/UnifiedUser.js';
 import LeagueProfile from '../models/LeagueProfile.js';
 import LadderPlayer from '../models/LadderPlayer.js';
@@ -67,13 +68,38 @@ export const unifiedSignup = async (req, res) => {
       });
     }
 
+    // Generate a random 4-digit PIN
+    const generateRandomPin = () => {
+      return Math.floor(1000 + Math.random() * 9000).toString();
+    };
+
+    // Ensure PIN is unique
+    let pin;
+    let isPinUnique = false;
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    while (!isPinUnique && attempts < maxAttempts) {
+      pin = generateRandomPin();
+      const existingPinUser = await UnifiedUser.findOne({ pin });
+      if (!existingPinUser) {
+        isPinUnique = true;
+      }
+      attempts++;
+    }
+
+    // If we couldn't generate a unique PIN after max attempts, use a timestamp-based PIN
+    if (!isPinUnique) {
+      pin = Date.now().toString().slice(-4);
+    }
+
     // Create new unified user
     const newUser = new UnifiedUser({
       firstName,
       lastName,
       email: email.toLowerCase(),
       phone: phone || '',
-      pin: `${firstName}${lastName}`, // Default PIN
+      pin: pin, // Random 4-digit PIN
       password: password || null, // Optional password
       isActive: true,
       isApproved: true,
@@ -911,9 +937,39 @@ export const addUnifiedUser = async (req, res) => {
       });
     }
 
+    // Generate a random 4-digit PIN if not provided or if it looks like a name
+    const generateRandomPin = () => {
+      return Math.floor(1000 + Math.random() * 9000).toString();
+    };
+
+    let pin = userData.pin;
+    
+    // Check if PIN is provided and doesn't look like a name (contains only digits)
+    if (!pin || !/^\d+$/.test(pin) || pin.length !== 4) {
+      // Generate a unique random PIN
+      let isPinUnique = false;
+      let attempts = 0;
+      const maxAttempts = 10;
+
+      while (!isPinUnique && attempts < maxAttempts) {
+        pin = generateRandomPin();
+        const existingPinUser = await UnifiedUser.findOne({ pin });
+        if (!existingPinUser) {
+          isPinUnique = true;
+        }
+        attempts++;
+      }
+
+      // If we couldn't generate a unique PIN after max attempts, use a timestamp-based PIN
+      if (!isPinUnique) {
+        pin = Date.now().toString().slice(-4);
+      }
+    }
+
     // Create new user
     const newUser = new UnifiedUser({
       ...userData,
+      pin: pin, // Ensure we use the proper PIN
       isActive: true,
       isApproved: true,
       registrationDate: new Date(),
@@ -1027,6 +1083,82 @@ export const deleteUnifiedUser = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Internal server error deleting user'
+    });
+  }
+};
+
+// Soft delete unified user (move to deleted_users collection)
+export const softDeleteUnifiedUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { deletedAt, deletedBy } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required'
+      });
+    }
+
+    const user = await UnifiedUser.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Create a copy of the user data for the deleted_users collection
+    const deletedUserData = {
+      ...user.toObject(),
+      originalId: user._id,
+      deletedAt: deletedAt || new Date(),
+      deletedBy: deletedBy || 'admin',
+      deletedReason: 'Admin soft delete'
+    };
+
+    // Remove the _id field to let MongoDB generate a new one
+    delete deletedUserData._id;
+
+    // Insert into deleted_users collection
+    const DeletedUser = mongoose.model('DeletedUser', UnifiedUser.schema, 'deletedusers');
+    await DeletedUser.create(deletedUserData);
+
+    // Also soft delete associated profiles by marking them as inactive
+    await LeagueProfile.updateMany(
+      { userId: user._id },
+      { 
+        isActive: false,
+        deletedAt: new Date(),
+        deletedBy: deletedBy || 'admin'
+      }
+    );
+
+    await LadderPlayer.updateMany(
+      { 
+        firstName: user.firstName, 
+        lastName: user.lastName 
+      },
+      { 
+        isActive: false,
+        deletedAt: new Date(),
+        deletedBy: deletedBy || 'admin'
+      }
+    );
+
+    // Remove the user from the main collection
+    await UnifiedUser.findByIdAndDelete(userId);
+
+    res.json({
+      success: true,
+      message: 'User moved to deleted users collection successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Admin: Soft delete unified user error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error soft deleting user'
     });
   }
 };

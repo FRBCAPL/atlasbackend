@@ -1642,17 +1642,35 @@ router.post('/:leagueId/ladders/:ladderId/matches', async (req, res) => {
   }
 });
 
-// Update match result (Admin only)
+// Update match (Admin only) - comprehensive edit
 router.put('/:leagueId/ladders/:ladderId/matches/:matchId', async (req, res) => {
   try {
     const { leagueId, ladderId, matchId } = req.params;
-    const { winner, score, notes, completedDate, reportedBy } = req.body;
+    const { 
+      winner, 
+      score, 
+      notes, 
+      adminNotes,
+      completedDate, 
+      scheduledDate,
+      venue,
+      entryFee,
+      raceLength,
+      gameType,
+      tableSize,
+      status,
+      reportedBy,
+      lmsStatus,
+      lmsScheduledAt,
+      lmsCompletedAt,
+      lmsNotes
+    } = req.body;
 
-    // Validate required fields
-    if (!winner || !score) {
+    // Validate required fields only if winner is provided (for completed matches)
+    if (winner && !score) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: winner, score'
+        message: 'Score is required when setting a winner'
       });
     }
 
@@ -1675,22 +1693,47 @@ router.put('/:leagueId/ladders/:ladderId/matches/:matchId', async (req, res) => 
       });
     }
 
-    // Get winner and loser
-    const winnerPlayer = match.player1._id.toString() === winner ? match.player1 : match.player2;
-    const loserPlayer = match.player1._id.toString() === winner ? match.player2 : match.player1;
+    // Update match with all provided fields
+    if (winner) {
+      // Get winner and loser only when winner is provided
+      const winnerPlayer = match.player1._id.toString() === winner ? match.player1 : match.player2;
+      const loserPlayer = match.player1._id.toString() === winner ? match.player2 : match.player1;
+      
+      match.winner = winner;
+      match.loser = loserPlayer._id;
+    }
+    if (score) match.score = score;
+    if (notes !== undefined) match.notes = notes;
+    if (adminNotes !== undefined) match.adminNotes = adminNotes;
+    if (completedDate) match.completedDate = new Date(completedDate);
+    if (scheduledDate) match.scheduledDate = new Date(scheduledDate);
+    if (venue) match.venue = venue;
+    if (entryFee !== undefined) match.entryFee = entryFee;
+    if (raceLength !== undefined) match.raceLength = raceLength;
+    if (gameType) match.gameType = gameType;
+    if (tableSize) match.tableSize = tableSize;
+    if (status) match.status = status;
+    if (reportedBy) match.reportedBy = reportedBy;
+    if (lmsStatus) match.lmsStatus = lmsStatus;
+    if (lmsScheduledAt) match.lmsScheduledAt = new Date(lmsScheduledAt);
+    if (lmsCompletedAt) match.lmsCompletedAt = new Date(lmsCompletedAt);
+    if (lmsNotes !== undefined) match.lmsNotes = lmsNotes;
+    
+    // If winner is provided, mark as completed
+    if (winner && !completedDate) {
+      match.completedDate = new Date();
+    }
+    if (winner) {
+      match.status = 'completed';
+    }
+    if (winner) {
+      match.reportedAt = new Date();
+    }
 
-    // Update match with results
-    match.winner = winner;
-    match.loser = loserPlayer._id;
-    match.score = score;
-    match.notes = notes || match.notes;
-    match.completedDate = completedDate ? new Date(completedDate) : new Date();
-    match.status = 'completed';
-    match.reportedBy = reportedBy || winner; // Use reportedBy if provided, otherwise use winner
-    match.reportedAt = new Date();
-
-    // Calculate new positions based on match type
-    let newWinnerPosition, newLoserPosition;
+    // Only calculate position changes if winner is being set
+    if (winner) {
+      // Calculate new positions based on match type
+      let newWinnerPosition, newLoserPosition;
     
     if (match.matchType === 'smackdown') {
       // SmackDown rules: If challenger wins, defender moves 3 spots down, challenger moves 2 spots up
@@ -1762,19 +1805,26 @@ router.put('/:leagueId/ladders/:ladderId/matches/:matchId', async (req, res) => 
     loserPlayer.losses = (loserPlayer.losses || 0) + 1;
     loserPlayer.totalMatches = (loserPlayer.totalMatches || 0) + 1;
 
-    await winnerPlayer.save();
-    await loserPlayer.save();
+      await winnerPlayer.save();
+      await loserPlayer.save();
+    }
+
+    // Save the match regardless of whether winner was set
+    await match.save();
 
     res.json({
       success: true,
-      message: 'Match result updated successfully',
+      message: winner ? 'Match result updated successfully' : 'Match updated successfully',
       match: {
         id: match._id,
-        winner: `${winnerPlayer.firstName} ${winnerPlayer.lastName}`,
-        loser: `${loserPlayer.firstName} ${loserPlayer.lastName}`,
-        score: score,
+        winner: winner ? `${match.player1.firstName} ${match.player1.lastName}` : null,
+        loser: winner ? `${match.player2.firstName} ${match.player2.lastName}` : null,
+        score: match.score,
         completedDate: match.completedDate,
-        status: 'completed'
+        status: match.status,
+        notes: match.notes,
+        adminNotes: match.adminNotes,
+        venue: match.venue
       }
     });
 
@@ -1783,6 +1833,147 @@ router.put('/:leagueId/ladders/:ladderId/matches/:matchId', async (req, res) => 
     res.status(500).json({
       success: false,
       message: 'Failed to update match result',
+      error: error.message
+    });
+  }
+});
+
+// Delete match (Admin only)
+router.delete('/:leagueId/ladders/:ladderId/matches/:matchId', async (req, res) => {
+  try {
+    const { leagueId, ladderId, matchId } = req.params;
+
+    // Find the match
+    const match = await LadderMatch.findById(matchId)
+      .populate('player1 player2', 'firstName lastName position ladderName');
+
+    if (!match) {
+      return res.status(404).json({
+        success: false,
+        message: 'Match not found'
+      });
+    }
+
+    // Validate match is on the correct ladder
+    if (match.player1Ladder !== ladderId && match.player2Ladder !== ladderId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Match is not on the specified ladder'
+      });
+    }
+
+    // If match is completed, we need to reverse position changes
+    if (match.status === 'completed' && match.winner && match.loser) {
+      const winnerPlayer = await LadderPlayer.findById(match.winner);
+      const loserPlayer = await LadderPlayer.findById(match.loser);
+
+      if (winnerPlayer && loserPlayer) {
+        // Reverse position changes
+        winnerPlayer.position = match.player1OldPosition;
+        loserPlayer.position = match.player2OldPosition;
+
+        // Reverse stats
+        winnerPlayer.wins = Math.max((winnerPlayer.wins || 0) - 1, 0);
+        winnerPlayer.totalMatches = Math.max((winnerPlayer.totalMatches || 0) - 1, 0);
+        loserPlayer.losses = Math.max((loserPlayer.losses || 0) - 1, 0);
+        loserPlayer.totalMatches = Math.max((loserPlayer.totalMatches || 0) - 1, 0);
+
+        await winnerPlayer.save();
+        await loserPlayer.save();
+      }
+    }
+
+    // Delete the match
+    await LadderMatch.findByIdAndDelete(matchId);
+
+    res.json({
+      success: true,
+      message: 'Match deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Error deleting match:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete match',
+      error: error.message
+    });
+  }
+});
+
+// Get match details for editing (Admin only)
+router.get('/:leagueId/ladders/:ladderId/matches/:matchId', async (req, res) => {
+  try {
+    const { leagueId, ladderId, matchId } = req.params;
+
+    const match = await LadderMatch.findById(matchId)
+      .populate('player1 player2 winner loser', 'firstName lastName position ladderName email phone')
+      .populate('challengeId', 'challengeType status');
+
+    if (!match) {
+      return res.status(404).json({
+        success: false,
+        message: 'Match not found'
+      });
+    }
+
+    // Validate match is on the correct ladder
+    if (match.player1Ladder !== ladderId && match.player2Ladder !== ladderId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Match is not on the specified ladder'
+      });
+    }
+
+    res.json({
+      success: true,
+      match: {
+        id: match._id,
+        matchType: match.matchType,
+        player1: {
+          id: match.player1._id,
+          name: `${match.player1.firstName} ${match.player1.lastName}`,
+          position: match.player1.position,
+          email: match.player1.email,
+          phone: match.player1.phone
+        },
+        player2: {
+          id: match.player2._id,
+          name: `${match.player2.firstName} ${match.player2.lastName}`,
+          position: match.player2.position,
+          email: match.player2.email,
+          phone: match.player2.phone
+        },
+        winner: match.winner ? {
+          id: match.winner._id,
+          name: `${match.winner.firstName} ${match.winner.lastName}`
+        } : null,
+        loser: match.loser ? {
+          id: match.loser._id,
+          name: `${match.loser.firstName} ${match.loser.lastName}`
+        } : null,
+        score: match.score,
+        status: match.status,
+        scheduledDate: match.scheduledDate,
+        completedDate: match.completedDate,
+        venue: match.venue,
+        notes: match.notes,
+        adminNotes: match.adminNotes,
+        entryFee: match.entryFee,
+        raceLength: match.raceLength,
+        gameType: match.gameType,
+        tableSize: match.tableSize,
+        challengeId: match.challengeId,
+        createdAt: match.createdAt,
+        updatedAt: match.updatedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching match details:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch match details',
       error: error.message
     });
   }

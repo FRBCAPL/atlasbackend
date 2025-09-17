@@ -183,7 +183,26 @@ const ladderMatchSchema = new mongoose.Schema({
     description: String,
     value: Number,
     providedBy: String
-  }]
+  }],
+
+  // LMS Tracking
+  lmsStatus: {
+    type: String,
+    enum: ['not_entered', 'scheduled', 'completed'],
+    default: 'not_entered'
+  },
+  lmsScheduledAt: {
+    type: Date,
+    default: null
+  },
+  lmsCompletedAt: {
+    type: Date,
+    default: null
+  },
+  lmsNotes: {
+    type: String,
+    default: null
+  }
 }, {
   timestamps: true
 });

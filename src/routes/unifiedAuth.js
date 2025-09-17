@@ -16,6 +16,7 @@ import {
   addUnifiedUser,
   updateUnifiedUser,
   deleteUnifiedUser,
+  softDeleteUnifiedUser,
   getUnifiedSystemStats
 } from '../controllers/unifiedAuthController.js';
 
@@ -72,6 +73,9 @@ router.put('/admin/update-user/:userId', updateUnifiedUser);
 
 // Delete unified user
 router.delete('/admin/delete-user/:userId', deleteUnifiedUser);
+
+// Soft delete unified user (move to deleted_users collection)
+router.put('/admin/soft-delete-user/:userId', softDeleteUnifiedUser);
 
 // Get unified system statistics
 router.get('/admin/system-stats', getUnifiedSystemStats);

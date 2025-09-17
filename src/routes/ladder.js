@@ -8,6 +8,7 @@ import User from '../models/User.js'; // Added import for User
 import UnifiedUser from '../models/UnifiedUser.js'; // Added import for UnifiedUser
 import bcrypt from 'bcryptjs'; // Added import for bcrypt
 import PlayerRecognitionService from '../services/PlayerRecognitionService.js';
+import { sanitizeDateInput, dateStringToDate, getCurrentISODate } from '../utils/dateUtils.js';
 
 // Helper function to get maximum position for a ladder
 const getMaxPosition = async (ladderId) => {
@@ -1591,7 +1592,7 @@ router.post('/:leagueId/ladders/:ladderId/matches', async (req, res) => {
       player2NewPosition: defender.position, // Will be updated when match is completed
       player1Ladder: challenger.ladderName,
       player2Ladder: defender.ladderName,
-      scheduledDate: new Date(proposedDate),
+      scheduledDate: sanitizeDateInput(proposedDate),
       completedDate: null, // Will be set when match is completed
       venue: location || 'Legends Brews & Cues',
       status: 'scheduled'
@@ -1705,8 +1706,8 @@ router.put('/:leagueId/ladders/:ladderId/matches/:matchId', async (req, res) => 
     if (score) match.score = score;
     if (notes !== undefined) match.notes = notes;
     if (adminNotes !== undefined) match.adminNotes = adminNotes;
-    if (completedDate) match.completedDate = new Date(completedDate);
-    if (scheduledDate) match.scheduledDate = new Date(scheduledDate);
+    if (completedDate) match.completedDate = sanitizeDateInput(completedDate);
+    if (scheduledDate) match.scheduledDate = sanitizeDateInput(scheduledDate);
     if (venue) match.venue = venue;
     if (entryFee !== undefined) match.entryFee = entryFee;
     if (raceLength !== undefined) match.raceLength = raceLength;
@@ -1721,13 +1722,13 @@ router.put('/:leagueId/ladders/:ladderId/matches/:matchId', async (req, res) => 
     
     // If winner is provided, mark as completed
     if (winner && !completedDate) {
-      match.completedDate = new Date();
+      match.completedDate = getCurrentISODate();
     }
     if (winner) {
       match.status = 'completed';
     }
     if (winner) {
-      match.reportedAt = new Date();
+      match.reportedAt = getCurrentISODate();
     }
 
     // Only calculate position changes if winner is being set

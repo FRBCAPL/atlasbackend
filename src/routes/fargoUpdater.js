@@ -1,5 +1,6 @@
 import express from 'express';
 import LadderPlayer from '../models/LadderPlayer.js';
+import Ladder from '../models/Ladder.js';
 import mongoose from 'mongoose';
 import fs from 'fs';
 import path from 'path';
@@ -198,27 +199,40 @@ router.post('/fargo-update', async (req, res) => {
                 continue;
             }
             
-            const player = await LadderPlayer.findById(playerId);
-            if (player) {
-                const oldRating = player.fargoRate;
-                const parsedNewRating = parseInt(newFargoRate, 10);
-                
-                console.log(`Player ${player.firstName} ${player.lastName}: current=${oldRating}, new=${parsedNewRating}`);
-                
-                if (player.fargoRate !== parsedNewRating) {
-                    player.fargoRate = parsedNewRating;
-                    await player.save();
-                    updatedCount++;
-                    changes.push({ playerId, name: `${player.firstName} ${player.lastName}`, oldRating, newRating: parsedNewRating });
-                    logUpdate(`Updated ${player.firstName} ${player.lastName}: ${oldRating} -> ${parsedNewRating}`);
-                    console.log(`✅ Updated ${player.firstName} ${player.lastName}: ${oldRating} -> ${parsedNewRating}`);
+            // Validate ObjectId format
+            if (!mongoose.Types.ObjectId.isValid(playerId)) {
+                logUpdate(`Invalid ObjectId format for playerId: ${playerId}`, 'WARN');
+                console.log(`❌ Invalid ObjectId format: ${playerId}`);
+                continue;
+            }
+            
+            try {
+                const player = await LadderPlayer.findById(playerId);
+                if (player) {
+                    const oldRating = player.fargoRate;
+                    const parsedNewRating = parseInt(newFargoRate, 10);
+                    
+                    console.log(`Player ${player.firstName} ${player.lastName}: current=${oldRating}, new=${parsedNewRating}`);
+                    
+                    if (player.fargoRate !== parsedNewRating) {
+                        player.fargoRate = parsedNewRating;
+                        await player.save();
+                        updatedCount++;
+                        changes.push({ playerId, name: `${player.firstName} ${player.lastName}`, oldRating, newRating: parsedNewRating });
+                        logUpdate(`Updated ${player.firstName} ${player.lastName}: ${oldRating} -> ${parsedNewRating}`);
+                        console.log(`✅ Updated ${player.firstName} ${player.lastName}: ${oldRating} -> ${parsedNewRating}`);
+                    } else {
+                        unchangedCount++;
+                        console.log(`➖ No change needed for ${player.firstName} ${player.lastName}`);
+                    }
                 } else {
-                    unchangedCount++;
-                    console.log(`➖ No change needed for ${player.firstName} ${player.lastName}`);
+                    logUpdate(`Player not found for ID: ${playerId}`, 'WARN');
+                    console.log(`❌ Player not found for ID: ${playerId}`);
                 }
-            } else {
-                logUpdate(`Player not found for ID: ${playerId}`, 'WARN');
-                console.log(`❌ Player not found for ID: ${playerId}`);
+            } catch (dbError) {
+                logUpdate(`Database error for playerId ${playerId}: ${dbError.message}`, 'ERROR');
+                console.error(`❌ Database error for playerId ${playerId}:`, dbError.message);
+                // Continue processing other updates instead of failing completely
             }
         }
         
@@ -377,6 +391,14 @@ router.post('/promote-players', async (req, res) => {
                     continue;
                 }
                 
+                // Get the target ladder's ID
+                const targetLadderDoc = await Ladder.findOne({ name: targetLadder });
+                if (!targetLadderDoc) {
+                    console.log(`Target ladder not found: ${targetLadder}`);
+                    errorCount++;
+                    continue;
+                }
+                
                 // Get the next available position in the target ladder
                 const maxPosition = await LadderPlayer.findOne({ ladderName: targetLadder })
                     .sort({ position: -1 })
@@ -385,6 +407,7 @@ router.post('/promote-players', async (req, res) => {
                 
                 // Update the player's ladder and position
                 const oldPosition = player.position;
+                player.ladderId = targetLadderDoc._id;
                 player.ladderName = targetLadder;
                 player.position = newPosition;
                 await player.save();

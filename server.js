@@ -42,6 +42,7 @@ import './src/models/Membership.js';
 import './src/models/PrizePool.js';
 import './src/models/PaymentConfig.js';
 import './src/models/UnifiedUser.js';
+import './src/models/CuelessBooking.js';
 
 // Import security middleware
 import { 

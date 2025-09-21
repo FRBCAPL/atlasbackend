@@ -35,6 +35,9 @@ import emailRoutes from './email.js';
 // Dues Tracker routes
 import duesTrackerRoutes from './duesTracker.js';
 
+// Cueless Booking routes
+import cuelessBookingRoutes from './cuelessBookings.js';
+
 
 const router = express.Router();
 
@@ -70,6 +73,9 @@ router.use('/email', emailRoutes);
 
 // Dues Tracker routes
 router.use('/dues-tracker', duesTrackerRoutes);
+
+// Cueless Booking routes
+router.use('/cueless', cuelessBookingRoutes);
 
 
 // Simple test route

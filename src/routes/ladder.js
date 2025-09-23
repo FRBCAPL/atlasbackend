@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import Ladder from '../models/Ladder.js';
 import LadderPlayer from '../models/LadderPlayer.js';
 import LadderChallenge from '../models/LadderChallenge.js';
@@ -908,9 +909,37 @@ router.patch('/matches/:id/complete', async (req, res) => {
     
     await match.complete(winnerId, score, notes, venue, completedAt);
     
+    // Update ladder positions after match completion
+    const winner = await LadderPlayer.findById(winnerId);
+    const loser = await LadderPlayer.findById(match.loser);
+    
+    if (winner && loser && winner.ladderName === loser.ladderName) {
+      // Update win/loss records
+      winner.wins = (winner.wins || 0) + 1;
+      winner.totalMatches = (winner.totalMatches || 0) + 1;
+      loser.losses = (loser.losses || 0) + 1;
+      loser.totalMatches = (loser.totalMatches || 0) + 1;
+      
+      // Only swap positions if the winner was the challenger (lower ranked player with higher position number)
+      // In ladder challenges, only the challenger can move up by winning
+      if (match.matchType === 'challenge' && winner.position > loser.position) {
+        // Swap positions - winner takes loser's better position
+        const tempPosition = winner.position;
+        winner.position = loser.position;
+        loser.position = tempPosition;
+        
+        console.log(`🔄 Ladder positions updated: ${winner.firstName} ${winner.lastName} (challenger) moved from #${tempPosition} to #${winner.position}, ${loser.firstName} ${loser.lastName} (defender) moved from #${winner.position} to #${loser.position}`);
+      }
+      
+      await winner.save();
+      await loser.save();
+      
+      console.log(`📊 Records updated: ${winner.firstName} ${winner.lastName} now ${winner.wins}W-${loser.losses}L, ${loser.firstName} ${loser.lastName} now ${loser.wins}W-${loser.losses}L`);
+    }
+    
     res.json({ 
       success: true, 
-      message: 'Match completed successfully',
+      message: 'Match completed successfully and ladder positions updated',
       match 
     });
     
@@ -2605,6 +2634,294 @@ router.get('/matches/confirmed', async (req, res) => {
       success: false,
       error: 'Failed to fetch confirmed matches'
     });
+  }
+});
+
+// ADMIN ENDPOINTS FOR LADDER MANAGEMENT
+
+// Update player position (admin only)
+router.put('/admin/players/:playerId/position', async (req, res) => {
+  try {
+    const { playerId } = req.params;
+    const { newPosition, ladderName } = req.body;
+    
+    if (!newPosition || !ladderName) {
+      return res.status(400).json({ error: 'newPosition and ladderName are required' });
+    }
+    
+    const player = await LadderPlayer.findById(playerId);
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    
+    const oldPosition = player.position;
+    player.position = parseInt(newPosition);
+    
+    // If moving to a position that's already taken, shift other players down
+    const existingPlayer = await LadderPlayer.findOne({ 
+      ladderName, 
+      position: newPosition,
+      _id: { $ne: playerId }
+    });
+    
+    if (existingPlayer) {
+      // Find the next available position
+      let nextPosition = parseInt(newPosition) + 1;
+      let nextPlayer = await LadderPlayer.findOne({ ladderName, position: nextPosition });
+      
+      while (nextPlayer) {
+        nextPlayer.position += 1;
+        await nextPlayer.save();
+        nextPosition += 1;
+        nextPlayer = await LadderPlayer.findOne({ ladderName, position: nextPosition });
+      }
+    }
+    
+    await player.save();
+    
+    res.json({
+      success: true,
+      message: `Player position updated from #${oldPosition} to #${newPosition}`,
+      player: {
+        id: player._id,
+        name: `${player.firstName} ${player.lastName}`,
+        oldPosition,
+        newPosition: player.position
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error updating player position:', error);
+    res.status(500).json({ error: 'Failed to update player position' });
+  }
+});
+
+// Update player win/loss records (admin only)
+router.put('/admin/players/:playerId/records', async (req, res) => {
+  try {
+    const { playerId } = req.params;
+    const { wins, losses, totalMatches } = req.body;
+    
+    const player = await LadderPlayer.findById(playerId);
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    
+    if (wins !== undefined) player.wins = parseInt(wins);
+    if (losses !== undefined) player.losses = parseInt(losses);
+    if (totalMatches !== undefined) player.totalMatches = parseInt(totalMatches);
+    
+    await player.save();
+    
+    res.json({
+      success: true,
+      message: 'Player records updated successfully',
+      player: {
+        id: player._id,
+        name: `${player.firstName} ${player.lastName}`,
+        wins: player.wins,
+        losses: player.losses,
+        totalMatches: player.totalMatches
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error updating player records:', error);
+    res.status(500).json({ error: 'Failed to update player records' });
+  }
+});
+
+// Recalculate ladder positions based on wins/losses (admin only)
+router.post('/admin/ladders/:ladderName/recalculate', async (req, res) => {
+  try {
+    const { ladderName } = req.params;
+    
+    // Get all players in the ladder, sorted by current position
+    const players = await LadderPlayer.find({ ladderName })
+      .sort({ position: 1 });
+    
+    // Sort by win percentage (wins / total matches), then by total wins
+    players.sort((a, b) => {
+      const aWinRate = a.totalMatches > 0 ? (a.wins || 0) / a.totalMatches : 0;
+      const bWinRate = b.totalMatches > 0 ? (b.wins || 0) / b.totalMatches : 0;
+      
+      if (aWinRate !== bWinRate) {
+        return bWinRate - aWinRate; // Higher win rate first
+      }
+      
+      // If win rates are equal, sort by total wins
+      return (b.wins || 0) - (a.wins || 0);
+    });
+    
+    // Update positions based on new ranking
+    for (let i = 0; i < players.length; i++) {
+      players[i].position = i + 1;
+      await players[i].save();
+    }
+    
+    res.json({
+      success: true,
+      message: `Ladder positions recalculated for ${ladderName}`,
+      players: players.map(p => ({
+        id: p._id,
+        name: `${p.firstName} ${p.lastName}`,
+        position: p.position,
+        wins: p.wins || 0,
+        losses: p.losses || 0,
+        totalMatches: p.totalMatches || 0
+      }))
+    });
+    
+  } catch (error) {
+    console.error('Error recalculating ladder:', error);
+    res.status(500).json({ error: 'Failed to recalculate ladder positions' });
+  }
+});
+
+// Fix all positions - assign sequential positions (admin only)
+router.post('/admin/ladders/:ladderName/fix-positions', async (req, res) => {
+  try {
+    const { ladderName } = req.params;
+    console.log(`🔧 Fixing positions for ladder: ${ladderName}`);
+    
+    // Get all players in the ladder, sorted by current position
+    const players = await LadderPlayer.find({ ladderName })
+      .sort({ position: 1 });
+    
+    console.log(`📊 Found ${players.length} players to renumber`);
+    console.log(`📋 Current positions:`, players.map(p => `${p.firstName} ${p.lastName}: ${p.position}`));
+    
+    // Assign sequential positions starting from 1 for ALL players
+    let currentPosition = 1;
+    const changes = [];
+    
+    for (const player of players) {
+      const oldPosition = player.position;
+      player.position = currentPosition;
+      await player.save();
+      
+      if (oldPosition !== currentPosition) {
+        console.log(`✅ ${player.firstName} ${player.lastName}: position ${oldPosition} → ${currentPosition}`);
+        changes.push(`${player.firstName} ${player.lastName}: ${oldPosition} → ${currentPosition}`);
+      }
+      currentPosition++;
+    }
+    
+    console.log(`🎯 Final positions:`, players.map(p => `${p.firstName} ${p.lastName}: ${p.position}`));
+    
+    res.json({
+      success: true,
+      message: `Fixed ${players.length} player positions for ${ladderName}. ${changes.length} changes made.`,
+      changes: changes,
+      players: players.map(p => ({
+        id: p._id,
+        name: `${p.firstName} ${p.lastName}`,
+        position: p.position
+      }))
+    });
+    
+  } catch (error) {
+    console.error('Error fixing positions:', error);
+    res.status(500).json({ error: 'Failed to fix ladder positions' });
+  }
+});
+
+// Simple renumber active players only - direct database update
+router.post('/admin/ladders/:ladderName/renumber', async (req, res) => {
+  try {
+    const { ladderName } = req.params;
+    console.log(`🔢 SIMPLE RENUMBER for ${ladderName} (active players only)`);
+    
+    // Get only ACTIVE players and renumber them 1, 2, 3, 4...
+    const players = await LadderPlayer.find({ ladderName, isActive: true }).sort({ _id: 1 });
+    
+    console.log(`Found ${players.length} ACTIVE players to renumber`);
+    
+    // Update each active player with sequential position
+    for (let i = 0; i < players.length; i++) {
+      const player = players[i];
+      const newPosition = i + 1;
+      console.log(`Setting ${player.firstName} ${player.lastName} to position ${newPosition}`);
+      
+      await LadderPlayer.updateOne(
+        { _id: player._id },
+        { $set: { position: newPosition } }
+      );
+    }
+    
+    console.log(`✅ Renumbered ${players.length} active players`);
+    
+    res.json({
+      success: true,
+      message: `Renumbered ${players.length} active players sequentially`,
+      count: players.length
+    });
+    
+  } catch (error) {
+    console.error('Error renumbering:', error);
+    res.status(500).json({ error: 'Failed to renumber players' });
+  }
+});
+
+// Swap two player positions (admin only)
+router.post('/admin/players/swap-positions', async (req, res) => {
+  try {
+    const { player1Id, player2Id } = req.body;
+    
+    if (!player1Id || !player2Id) {
+      return res.status(400).json({ error: 'Both player IDs are required' });
+    }
+    
+    if (player1Id === player2Id) {
+      return res.status(400).json({ error: 'Cannot swap a player with themselves' });
+    }
+    
+    console.log(`🔄 Swapping positions for players: ${player1Id} and ${player2Id}`);
+    
+    // Get both players
+    const player1 = await LadderPlayer.findById(player1Id);
+    const player2 = await LadderPlayer.findById(player2Id);
+    
+    if (!player1 || !player2) {
+      return res.status(404).json({ error: 'One or both players not found' });
+    }
+    
+    // Store the positions
+    const player1Position = player1.position;
+    const player2Position = player2.position;
+    
+    // Swap the positions
+    player1.position = player2Position;
+    player2.position = player1Position;
+    
+    // Save both players
+    await player1.save();
+    await player2.save();
+    
+    console.log(`✅ Swapped positions: ${player1.firstName} ${player1.lastName} (#${player1Position} → #${player2Position}) and ${player2.firstName} ${player2.lastName} (#${player2Position} → #${player1Position})`);
+    
+    res.json({
+      success: true,
+      message: `Successfully swapped positions between ${player1.firstName} ${player1.lastName} and ${player2.firstName} ${player2.lastName}`,
+      swap: {
+        player1: {
+          id: player1._id,
+          name: `${player1.firstName} ${player1.lastName}`,
+          oldPosition: player1Position,
+          newPosition: player2Position
+        },
+        player2: {
+          id: player2._id,
+          name: `${player2.firstName} ${player2.lastName}`,
+          oldPosition: player2Position,
+          newPosition: player1Position
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error swapping player positions:', error);
+    res.status(500).json({ error: 'Failed to swap player positions' });
   }
 });
 

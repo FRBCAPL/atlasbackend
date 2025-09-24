@@ -154,10 +154,30 @@ export const searchUsers = async (req, res) => {
 export const getUser = async (req, res) => {
   try {
     const idOrEmail = decodeURIComponent(req.params.idOrEmail);
-    // Try to find by id or email
-    const user = await User.findOne({ $or: [ { id: idOrEmail }, { email: idOrEmail } ] });
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json(user);
+    
+    // Use UnifiedUser model instead of old User model
+    const UnifiedUser = (await import('../models/UnifiedUser.js')).default;
+    
+    // Try to find by MongoDB _id or email
+    let user = null;
+    
+    // First try by MongoDB ObjectId if it looks like one
+    if (idOrEmail.match(/^[0-9a-fA-F]{24}$/)) {
+      user = await UnifiedUser.findById(idOrEmail);
+    }
+    
+    // If not found by ID, try by email
+    if (!user) {
+      user = await UnifiedUser.findOne({ 
+        email: { $regex: new RegExp(`^${idOrEmail}$`, 'i') }
+      });
+    }
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ user });
   } catch (err) {
     console.error('Error fetching user:', err);
     res.status(500).json({ error: 'Failed to fetch user' });

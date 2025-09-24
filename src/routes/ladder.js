@@ -2223,8 +2223,31 @@ router.post('/admin/signup-applications/:id/approve', async (req, res) => {
       return res.status(404).json({ error: 'Application not found' });
     }
     
+    // Approve the ladder application
     await application.approve(reviewedBy, notes);
-    res.json({ message: 'Application approved successfully', application });
+    
+    // If this is linked to a UnifiedUser, also approve the unified account
+    if (application.unifiedUserId) {
+      const UnifiedUser = mongoose.model('UnifiedUser');
+      const unifiedUser = await UnifiedUser.findById(application.unifiedUserId);
+      
+      if (unifiedUser) {
+        // Approve the unified user account
+        unifiedUser.isActive = true;
+        unifiedUser.isApproved = true;
+        unifiedUser.isPendingApproval = false;
+        unifiedUser.notes = `${unifiedUser.notes}\nLadder application approved by ladder admin.`;
+        await unifiedUser.save();
+        
+        console.log(`✅ Unified user account approved: ${unifiedUser.firstName} ${unifiedUser.lastName} (${unifiedUser.email})`);
+      }
+    }
+    
+    res.json({ 
+      message: 'Application approved successfully', 
+      application,
+      unifiedUserApproved: !!application.unifiedUserId
+    });
   } catch (error) {
     console.error('Error approving application:', error);
     res.status(500).json({ error: 'Failed to approve application' });
@@ -2242,8 +2265,28 @@ router.post('/admin/signup-applications/:id/reject', async (req, res) => {
       return res.status(404).json({ error: 'Application not found' });
     }
     
+    // Reject the ladder application
     await application.reject(reviewedBy, notes);
-    res.json({ message: 'Application rejected successfully', application });
+    
+    // If this is linked to a UnifiedUser, add a note but don't reject the unified account
+    // (They might still want league access)
+    if (application.unifiedUserId) {
+      const UnifiedUser = mongoose.model('UnifiedUser');
+      const unifiedUser = await UnifiedUser.findById(application.unifiedUserId);
+      
+      if (unifiedUser) {
+        unifiedUser.notes = `${unifiedUser.notes}\nLadder application rejected by ladder admin: ${notes || 'No reason provided'}`;
+        await unifiedUser.save();
+        
+        console.log(`📝 Unified user account updated with ladder rejection: ${unifiedUser.firstName} ${unifiedUser.lastName} (${unifiedUser.email})`);
+      }
+    }
+    
+    res.json({ 
+      message: 'Application rejected successfully', 
+      application,
+      unifiedUserUpdated: !!application.unifiedUserId
+    });
   } catch (error) {
     console.error('Error rejecting application:', error);
     res.status(500).json({ error: 'Failed to reject application' });

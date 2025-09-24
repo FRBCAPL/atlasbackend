@@ -80,6 +80,11 @@ const ladderSignupApplicationSchema = new mongoose.Schema({
     type: String,
     trim: true,
     default: ''
+  },
+  unifiedUserId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'UnifiedUser',
+    default: null
   }
 }, {
   timestamps: true

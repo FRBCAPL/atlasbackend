@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import UnifiedUser from '../models/UnifiedUser.js';
 import LeagueProfile from '../models/LeagueProfile.js';
+import LadderProfile from '../models/LadderProfile.js';
 import LadderPlayer from '../models/LadderPlayer.js';
 import Ladder from '../models/Ladder.js';
 import User from '../models/User.js';
@@ -745,16 +746,80 @@ export const updateUnifiedProfile = async (req, res) => {
       });
     }
 
-    // For now, let's just update the main user record and return success
-    // This is a simplified approach to get profile updates working
-    if (updates.phone) {
-      user.phone = updates.phone;
-    }
-    if (updates.basic && updates.basic.phone) {
-      user.phone = updates.basic.phone;
+    // Update the main user record with basic info
+    if (updates.basic) {
+      if (updates.basic.firstName) user.firstName = updates.basic.firstName;
+      if (updates.basic.lastName) user.lastName = updates.basic.lastName;
+      if (updates.basic.email) user.email = updates.basic.email.toLowerCase();
+      if (updates.basic.phone) user.phone = updates.basic.phone;
     }
     
+    // Handle direct field updates
+    if (updates.phone) user.phone = updates.phone;
+    if (updates.firstName) user.firstName = updates.firstName;
+    if (updates.lastName) user.lastName = updates.lastName;
+    if (updates.email) user.email = updates.email.toLowerCase();
+    
     await user.save();
+
+    // Handle app-specific profile updates
+    if (appType === 'league') {
+      // Update or create league profile
+      let leagueProfile = await LeagueProfile.findOne({ userId: user._id });
+      
+      if (updates.locations !== undefined) {
+        if (!leagueProfile) {
+          leagueProfile = new LeagueProfile({ userId: user._id });
+        }
+        leagueProfile.locations = updates.locations;
+      }
+      
+      if (updates.availability !== undefined) {
+        if (!leagueProfile) {
+          leagueProfile = new LeagueProfile({ userId: user._id });
+        }
+        leagueProfile.availability = updates.availability;
+      }
+      
+      if (updates.preferredContacts !== undefined) {
+        if (!leagueProfile) {
+          leagueProfile = new LeagueProfile({ userId: user._id });
+        }
+        leagueProfile.preferredContacts = updates.preferredContacts;
+      }
+      
+      if (leagueProfile) {
+        await leagueProfile.save();
+      }
+    } else if (appType === 'ladder') {
+      // Update or create ladder profile
+      let ladderProfile = await LadderProfile.findOne({ userId: user._id });
+      
+      if (updates.locations !== undefined) {
+        if (!ladderProfile) {
+          ladderProfile = new LadderProfile({ userId: user._id });
+        }
+        ladderProfile.locations = updates.locations;
+      }
+      
+      if (updates.availability !== undefined) {
+        if (!ladderProfile) {
+          ladderProfile = new LadderProfile({ userId: user._id });
+        }
+        ladderProfile.availability = updates.availability;
+      }
+      
+      if (updates.preferredContacts !== undefined) {
+        if (!ladderProfile) {
+          ladderProfile = new LadderProfile({ userId: user._id });
+        }
+        ladderProfile.preferredContacts = updates.preferredContacts;
+      }
+      
+      if (ladderProfile) {
+        await ladderProfile.save();
+      }
+    }
 
     res.json({
       success: true,
@@ -762,7 +827,11 @@ export const updateUnifiedProfile = async (req, res) => {
       profile: {
         phone: user.phone || '',
         firstName: user.firstName,
-        lastName: user.lastName
+        lastName: user.lastName,
+        email: user.email,
+        locations: updates.locations || '',
+        availability: updates.availability || {},
+        preferredContacts: updates.preferredContacts || []
       }
     });
 

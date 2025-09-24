@@ -120,3 +120,74 @@ export const getEventsByDateRange = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch events' });
   }
 };
+
+// Add a match to the calendar (for approved match scheduling requests)
+export const addMatchToCalendar = async (req, res) => {
+  try {
+    const { title, description, location, startDateTime, endDateTime, matchDetails } = req.body;
+    
+    if (!title || !startDateTime) {
+      return res.status(400).json({ error: 'Title and start date/time are required' });
+    }
+
+    // Create calendar events for both players
+    const challengerName = matchDetails?.challenger || 'Unknown';
+    const defenderName = matchDetails?.defender || 'Unknown';
+    
+    const events = [];
+    
+    // Create event for challenger
+    const challengerEvent = new Calendar({
+      userId: challengerName,
+      eventType: 'match',
+      title: title,
+      description: description || '',
+      date: new Date(startDateTime),
+      startTime: new Date(startDateTime).toTimeString().split(' ')[0].substring(0, 5), // HH:MM format
+      endTime: endDateTime ? new Date(endDateTime).toTimeString().split(' ')[0].substring(0, 5) : null,
+      location: location || '',
+      matchDetails: {
+        opponent: defenderName,
+        gameType: matchDetails?.matchType || 'challenge',
+        raceLength: 'TBD',
+        division: matchDetails?.division || 'N/A',
+        proposalId: matchDetails?.proposalId
+      }
+    });
+    
+    // Create event for defender
+    const defenderEvent = new Calendar({
+      userId: defenderName,
+      eventType: 'match',
+      title: title,
+      description: description || '',
+      date: new Date(startDateTime),
+      startTime: new Date(startDateTime).toTimeString().split(' ')[0].substring(0, 5), // HH:MM format
+      endTime: endDateTime ? new Date(endDateTime).toTimeString().split(' ')[0].substring(0, 5) : null,
+      location: location || '',
+      matchDetails: {
+        opponent: challengerName,
+        gameType: matchDetails?.matchType || 'challenge',
+        raceLength: 'TBD',
+        division: matchDetails?.division || 'N/A',
+        proposalId: matchDetails?.proposalId
+      }
+    });
+
+    await challengerEvent.save();
+    await defenderEvent.save();
+    
+    events.push(challengerEvent, defenderEvent);
+
+    console.log(`✅ Added match to calendar: ${title} on ${startDateTime}`);
+
+    res.status(201).json({ 
+      success: true, 
+      message: 'Match added to calendar successfully',
+      events: events 
+    });
+  } catch (err) {
+    console.error('Error adding match to calendar:', err);
+    res.status(500).json({ error: 'Failed to add match to calendar' });
+  }
+};

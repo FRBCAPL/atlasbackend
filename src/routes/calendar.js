@@ -12,6 +12,9 @@ router.get('/events/range', calendarController.getEventsByDateRange);
 // Create a new calendar event
 router.post('/events', calendarController.createEvent);
 
+// Add a match to the calendar (for approved match scheduling requests)
+router.post('/add-match', calendarController.addMatchToCalendar);
+
 // Update a calendar event
 router.put('/events/:id', calendarController.updateEvent);
 

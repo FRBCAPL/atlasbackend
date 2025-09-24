@@ -68,6 +68,17 @@ const checkUnifiedAccountStatus = async (firstName, lastName) => {
       // Check for fake emails
       const isFakeEmail = /@(ladder\.local|ladder\.temp|test|temp|local|fake|example|dummy)/i.test(unifiedUser.email);
       if (isFakeEmail) reasons.push('fake email');
+      
+      // If it's a fake email, don't return the unifiedUserId
+      if (isFakeEmail) {
+        return {
+          hasUnifiedAccount: false,
+          isApproved: unifiedUser.isApproved,
+          isActive: unifiedUser.isActive,
+          email: unifiedUser.email,
+          unifiedUserId: null // Don't return the ID for fake emails
+        };
+      }
     }
     
     return {
@@ -75,7 +86,7 @@ const checkUnifiedAccountStatus = async (firstName, lastName) => {
       isApproved: unifiedUser?.isApproved || false,
       isActive: unifiedUser?.isActive || false,
       email: unifiedUser?.email || null,
-      unifiedUserId: unifiedUser?._id || null
+      unifiedUserId: unifiedUser?._id || null // Return the ID for real accounts that just aren't valid
     };
   } catch (error) {
     console.error('Error checking unified account status:', error);

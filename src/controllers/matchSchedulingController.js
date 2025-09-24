@@ -96,6 +96,165 @@ const checkRecentSmackDownWin = async (playerId, ladderId) => {
 };
 
 // Lookup player and get available matches
+// Lookup player by ID and get available matches (for when multiple players found)
+export const lookupPlayerByIdAndMatches = async (req, res) => {
+  try {
+    const { playerId } = req.body;
+
+    if (!playerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Player ID is required'
+      });
+    }
+
+    // Import LadderPlayer model
+    const LadderPlayer = mongoose.model('LadderPlayer');
+    const Ladder = mongoose.model('Ladder');
+
+    // Find the specific player by ID
+    const player = await LadderPlayer.findOne({
+      _id: playerId,
+      isActive: true
+    }).populate('ladderId');
+
+    if (!player) {
+      return res.status(404).json({
+        success: false,
+        message: 'Player not found.'
+      });
+    }
+
+    // Continue with the same match calculation logic as lookupPlayerAndMatches
+    return await calculatePlayerMatches(player, res);
+
+  } catch (error) {
+    console.error('Error in lookupPlayerByIdAndMatches:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Extract match calculation logic into a reusable function
+const calculatePlayerMatches = async (player, res) => {
+  try {
+    // Import models
+    const LadderPlayer = mongoose.model('LadderPlayer');
+    const Ladder = mongoose.model('Ladder');
+
+    // Get the specific ladder the player is on
+    let playerLadder = player.ladderId;
+    if (!playerLadder) {
+      return res.status(404).json({
+        success: false,
+        message: 'Player is not assigned to any ladder'
+      });
+    }
+
+    // Validate player is on correct ladder based on Fargo rate
+    const fargo = player.fargoRate || 0;
+    const expectedLadder = fargo <= 499 ? '499-under' : 
+                          fargo <= 549 ? '500-549' : '550-plus';
+    
+    if (playerLadder.name !== expectedLadder) {
+      console.warn(`⚠️  Player ${player.firstName} ${player.lastName} (Fargo: ${fargo}) is on ${playerLadder.name} but should be on ${expectedLadder} - Admin should move via ladder admin interface`);
+    }
+
+    // Get all players in the player's ladder, sorted by position
+    const ladderPlayers = await LadderPlayer.find({ 
+      ladderId: playerLadder._id,
+      isActive: true 
+    }).sort({ position: 1 });
+
+
+    // Calculate available matches
+    const availableMatches = [];
+
+    // Standard challenges (up to 4 positions above - players with LOWER position numbers)
+    const validChallenges = ladderPlayers.filter(p => 
+      p.position < player.position && 
+      p.position >= player.position - 4
+    );
+
+    validChallenges.forEach(opponent => {
+      availableMatches.push({
+        matchType: 'challenge',
+        defenderName: `${opponent.firstName} ${opponent.lastName}`,
+        defenderEmail: opponent.email,
+        defenderPhone: opponent.phone,
+        defenderPosition: opponent.position,
+        ladderName: playerLadder.name,
+        reason: `Challenge #${opponent.position} (Challenge up to 4 positions above)`,
+        icon: '⚔️',
+        color: '#4CAF50'
+      });
+    });
+
+    // SmackDown matches (up to 5 positions below - players with HIGHER position numbers)
+    const validSmackDowns = ladderPlayers.filter(p => 
+      p.position > player.position && 
+      p.position <= player.position + 5
+    );
+
+    validSmackDowns.forEach(opponent => {
+      availableMatches.push({
+        matchType: 'smackdown',
+        defenderName: `${opponent.firstName} ${opponent.lastName}`,
+        defenderEmail: opponent.email,
+        defenderPhone: opponent.phone,
+        defenderPosition: opponent.position,
+        ladderName: playerLadder.name,
+        reason: `SmackDown #${opponent.position} (SmackDown up to 5 positions below)`,
+        icon: '💥',
+        color: '#FF9800'
+      });
+    });
+
+    // SmackBack matches (only for #1 if player recently won a SmackDown as defender)
+    if (player.position === 1) {
+      const recentSmackDownWin = await checkRecentSmackDownWin(player._id, playerLadder._id);
+      if (recentSmackDownWin) {
+        const firstPlacePlayer = ladderPlayers.find(p => p.position === 1);
+        if (firstPlacePlayer && firstPlacePlayer._id.toString() !== player._id.toString()) {
+          availableMatches.push({
+            matchType: 'smackback',
+            defenderName: `${firstPlacePlayer.firstName} ${firstPlacePlayer.lastName}`,
+            defenderEmail: firstPlacePlayer.email,
+            defenderPhone: firstPlacePlayer.phone,
+            defenderPosition: firstPlacePlayer.position,
+            ladderName: playerLadder.name,
+            reason: 'SmackBack to #1',
+            icon: '🎯',
+            color: '#9C27B0'
+          });
+        }
+      }
+    }
+
+    return res.json({
+      success: true,
+      player: {
+        name: `${player.firstName} ${player.lastName}`,
+        email: player.email,
+        phone: player.phone,
+        position: player.position,
+        ladderName: playerLadder.name,
+        fargoRate: player.fargoRate || 0
+      },
+      availableMatches
+    });
+
+  } catch (error) {
+    console.error('Error in calculatePlayerMatches:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
 export const lookupPlayerAndMatches = async (req, res) => {
   try {
     const { playerName } = req.body;
@@ -111,8 +270,10 @@ export const lookupPlayerAndMatches = async (req, res) => {
     const LadderPlayer = mongoose.model('LadderPlayer');
     const Ladder = mongoose.model('Ladder');
 
-    // Find the player by name (case insensitive)
-    const player = await LadderPlayer.findOne({
+    // Find all players matching the name (case insensitive)
+    console.log(`🔍 Looking up player: "${playerName}"`);
+    
+    const players = await LadderPlayer.find({
       $or: [
         { firstName: { $regex: new RegExp(playerName, 'i') } },
         { lastName: { $regex: new RegExp(playerName, 'i') } },
@@ -127,127 +288,42 @@ export const lookupPlayerAndMatches = async (req, res) => {
       ],
       isActive: true
     }).populate('ladderId');
+    
+    console.log(`🔍 Found ${players.length} players matching "${playerName}":`);
+    players.forEach(p => {
+      console.log(`  - ${p.firstName} ${p.lastName}: ladderId=${p.ladderId?._id}, ladderName=${p.ladderId?.name}, fargo=${p.fargoRate}, position=${p.position}`);
+    });
 
-    if (!player) {
+    if (!players || players.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Player not found. Please check your name and try again.'
       });
     }
 
-    // Get all ladders to find available matches
-    const ladders = await Ladder.find({ isActive: true });
-    const availableMatches = [];
+    // If multiple players found, return them for selection
+    if (players.length > 1) {
+      const playerOptions = players.map(p => ({
+        _id: p._id,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        fullName: `${p.firstName} ${p.lastName}`,
+        position: p.position,
+        ladderName: p.ladderId?.name || 'Unknown',
+        fargoRate: p.fargoRate || 0
+      }));
 
-    for (const ladder of ladders) {
-      // Get all players in this ladder, sorted by position
-      const ladderPlayers = await LadderPlayer.find({ 
-        ladderId: ladder._id, 
-        isActive: true 
-      }).sort({ position: 1 });
-
-      // Find current player's position in this ladder
-      const currentPlayerInLadder = ladderPlayers.find(p => 
-        p._id.toString() === player._id.toString()
-      );
-
-      if (!currentPlayerInLadder) continue;
-
-      const currentPosition = currentPlayerInLadder.position;
-
-      // Find valid challenges (players above current position)
-      // Ladder rules: can challenge up to 4 positions above
-      const maxChallengePosition = Math.max(1, currentPosition - 4);
-      
-      const validChallenges = ladderPlayers.filter(p => 
-        p.position >= maxChallengePosition && 
-        p.position < currentPosition &&
-        p._id.toString() !== player._id.toString()
-      );
-
-      // Find valid smackdown targets (players below current position)
-      // SmackDown rules: can challenge up to 5 positions below
-      const maxSmackDownPosition = Math.min(ladderPlayers.length, currentPosition + 5);
-      
-      const validSmackDowns = ladderPlayers.filter(p => 
-        p.position > currentPosition && 
-        p.position <= maxSmackDownPosition &&
-        p._id.toString() !== player._id.toString()
-      );
-
-      // Check for SmackBack eligibility (can challenge #1 if just won a SmackDown as defender)
-      let validSmackBacks = [];
-      if (currentPosition > 1) {
-        // Check if player recently won a SmackDown as defender
-        const recentSmackDownWin = await checkRecentSmackDownWin(player._id, ladder._id);
-        if (recentSmackDownWin) {
-          const firstPlacePlayer = ladderPlayers.find(p => p.position === 1);
-          if (firstPlacePlayer) {
-            validSmackBacks.push(firstPlacePlayer);
-          }
-        }
-      }
-
-      // Add standard challenges to available matches
-      validChallenges.forEach(challenge => {
-        availableMatches.push({
-          matchType: 'challenge',
-          defenderName: `${challenge.firstName} ${challenge.lastName}`,
-          defenderEmail: challenge.email || '',
-          defenderPhone: challenge.phone || '',
-          defenderPosition: challenge.position,
-          ladderName: ladder.name,
-          reason: `⚔️ Standard Challenge - Can challenge up to 4 positions above (you're #${currentPosition})`,
-          icon: '⚔️',
-          color: '#2196F3'
-        });
-      });
-
-      // Add smackdown matches to available matches
-      validSmackDowns.forEach(smackdown => {
-        availableMatches.push({
-          matchType: 'smackdown',
-          defenderName: `${smackdown.firstName} ${smackdown.lastName}`,
-          defenderEmail: smackdown.email || '',
-          defenderPhone: smackdown.phone || '',
-          defenderPosition: smackdown.position,
-          ladderName: ladder.name,
-          reason: `💥 SmackDown - Can challenge up to 5 positions below (you're #${currentPosition})`,
-          icon: '💥',
-          color: '#f59e0b'
-        });
-      });
-
-      // Add smackback matches to available matches
-      validSmackBacks.forEach(smackback => {
-        availableMatches.push({
-          matchType: 'smackback',
-          defenderName: `${smackback.firstName} ${smackback.lastName}`,
-          defenderEmail: smackback.email || '',
-          defenderPhone: smackback.phone || '',
-          defenderPosition: smackback.position,
-          ladderName: ladder.name,
-          reason: `🚀 SmackBack - Challenge #1 after winning a SmackDown as defender`,
-          icon: '🚀',
-          color: '#10b981'
-        });
+      return res.json({
+        success: true,
+        multipleMatches: true,
+        message: `Found ${players.length} players with similar names. Please select the correct player:`,
+        playerOptions
       });
     }
 
-    console.log(`✅ Found ${availableMatches.length} available matches for ${player.firstName} ${player.lastName}`);
-
-    res.json({
-      success: true,
-      player: {
-        name: `${player.firstName} ${player.lastName}`,
-        email: player.email || '',
-        phone: player.phone || '',
-        position: player.position,
-        ladderName: player.ladderId?.name || 'Unknown',
-        fargoRate: player.fargoRate || 0
-      },
-      availableMatches
-    });
+    // Single player found, proceed with match calculation
+    const player = players[0];
+    return await calculatePlayerMatches(player, res);
 
   } catch (error) {
     console.error('Error looking up player and matches:', error);
@@ -261,63 +337,54 @@ export const lookupPlayerAndMatches = async (req, res) => {
 // Submit a new match scheduling request
 export const submitMatchSchedulingRequest = async (req, res) => {
   try {
-    const {
+    const { 
+      challengerName, 
+      challengerEmail, 
+      challengerPhone, 
+      defenderName, 
+      defenderEmail, 
+      defenderPhone, 
+      preferredDate, 
+      preferredTime, 
+      location, 
+      notes, 
+      matchType 
+    } = req.body;
+
+    // Validate required fields
+    if (!challengerName || !defenderName || !preferredDate || !preferredTime || !location) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields'
+      });
+    }
+
+    // Handle timezone - combine date and time with Mountain Time offset
+    const dateTimeString = `${preferredDate}T${preferredTime}:00-06:00`;
+    const scheduledDateTime = new Date(dateTimeString);
+
+    // Create new match scheduling request
+    const matchRequest = new MatchSchedulingRequest({
       challengerName,
       challengerEmail,
       challengerPhone,
       defenderName,
       defenderEmail,
       defenderPhone,
-      preferredDate,
-      preferredTime,
-      location,
-      notes,
-      matchType,
-      status
-    } = req.body;
-
-    // Validate required fields
-    if (!challengerName || !challengerEmail || !defenderName || !defenderEmail || !preferredDate || !preferredTime || !location) {
-      return res.status(400).json({
-        success: false,
-        message: 'All required fields must be provided'
-      });
-    }
-
-    // Create new match scheduling request with proper timezone handling
-    // Combine date and time, then convert to Mountain Time (UTC-6)
-    const dateTimeString = `${preferredDate}T${preferredTime}:00-06:00`;
-    const scheduledDateTime = new Date(dateTimeString);
-    
-    const matchRequest = new MatchSchedulingRequest({
-      challengerName,
-      challengerEmail,
-      challengerPhone: challengerPhone || '',
-      defenderName,
-      defenderEmail,
-      defenderPhone: defenderPhone || '',
       preferredDate: scheduledDateTime,
       preferredTime,
       location,
-      notes: notes || '',
+      notes,
       matchType: matchType || 'challenge',
-      status: status || 'pending_approval'
+      status: 'pending_approval'
     });
 
     await matchRequest.save();
 
-    console.log(`✅ Match scheduling request submitted: ${challengerName} vs ${defenderName} on ${preferredDate}`);
-
     res.json({
       success: true,
-      message: 'Match scheduling request submitted successfully. Admin approval required.',
-      request: {
-        _id: matchRequest._id,
-        challengerName: matchRequest.challengerName,
-        defenderName: matchRequest.defenderName,
-        preferredDate: matchRequest.preferredDate,
-        status: matchRequest.status
-      }
+      message: 'Match scheduling request submitted successfully. It will be reviewed by an admin.',
+      requestId: matchRequest._id
     });
 
   } catch (error) {
@@ -328,6 +395,7 @@ export const submitMatchSchedulingRequest = async (req, res) => {
     });
   }
 };
+
 
 // Get all pending match scheduling requests (for admin)
 export const getPendingMatchRequests = async (req, res) => {
@@ -445,6 +513,7 @@ export const rejectMatchRequest = async (req, res) => {
 
 export default {
   lookupPlayerAndMatches,
+  lookupPlayerByIdAndMatches,
   submitMatchSchedulingRequest,
   getPendingMatchRequests,
   getAllMatchRequests,

@@ -1,17 +1,21 @@
 import express from 'express';
-import {
-  lookupPlayerAndMatches,
-  submitMatchSchedulingRequest,
-  getPendingMatchRequests,
-  getAllMatchRequests,
-  approveMatchRequest,
-  rejectMatchRequest
+import { 
+  lookupPlayerAndMatches, 
+  lookupPlayerByIdAndMatches,
+  submitMatchSchedulingRequest, 
+  getPendingMatchRequests, 
+  getAllMatchRequests, 
+  approveMatchRequest, 
+  rejectMatchRequest 
 } from '../controllers/matchSchedulingController.js';
 
 const router = express.Router();
 
 // Lookup player and get available matches (public endpoint)
 router.post('/lookup-player', lookupPlayerAndMatches);
+
+// Lookup player by ID and get available matches (for multiple matches)
+router.post('/lookup-player-by-id', lookupPlayerByIdAndMatches);
 
 // Submit a new match scheduling request (public endpoint)
 router.post('/submit', submitMatchSchedulingRequest);

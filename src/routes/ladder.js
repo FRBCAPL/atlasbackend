@@ -305,34 +305,22 @@ router.put('/player/:id', async (req, res) => {
 
     // Handle ladder assignment - convert ladderName to ladderId
     if (updateData.ladderName) {
-      console.log(`🔄 Admin trying to move player ${player.firstName} ${player.lastName} to ${updateData.ladderName} ladder`);
-      console.log(`🔄 Current ladder: ${player.ladderName} (ID: ${player.ladderId})`);
-      
       const Ladder = mongoose.model('Ladder');
       const ladder = await Ladder.findOne({ name: updateData.ladderName });
       if (ladder) {
         filteredUpdates.ladderId = ladder._id;
         console.log(`🔄 Moving player ${player.firstName} ${player.lastName} to ${updateData.ladderName} ladder (ID: ${ladder._id})`);
-        console.log(`🔄 Update data:`, filteredUpdates);
       } else {
         console.warn(`⚠️  Ladder "${updateData.ladderName}" not found`);
       }
     }
     
     // Update the player
-    console.log(`🔄 Updating player with data:`, filteredUpdates);
     const updatedPlayer = await LadderPlayer.findByIdAndUpdate(
       id,
       filteredUpdates,
       { new: true, runValidators: true }
     );
-    
-    if (updatedPlayer) {
-      console.log(`✅ Player updated successfully: ${updatedPlayer.firstName} ${updatedPlayer.lastName}`);
-      console.log(`✅ New ladder: ${updatedPlayer.ladderName} (ID: ${updatedPlayer.ladderId})`);
-    } else {
-      console.error(`❌ Failed to update player`);
-    }
     
     // Enhance updated player with unified account status
     const unifiedStatus = await checkUnifiedAccountStatus(updatedPlayer.firstName, updatedPlayer.lastName);

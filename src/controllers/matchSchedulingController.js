@@ -271,8 +271,6 @@ export const lookupPlayerAndMatches = async (req, res) => {
     const Ladder = mongoose.model('Ladder');
 
     // Find all players matching the name (case insensitive)
-    console.log(`🔍 Looking up player: "${playerName}"`);
-    
     const players = await LadderPlayer.find({
       $or: [
         { firstName: { $regex: new RegExp(playerName, 'i') } },
@@ -288,11 +286,6 @@ export const lookupPlayerAndMatches = async (req, res) => {
       ],
       isActive: true
     }).populate('ladderId');
-    
-    console.log(`🔍 Found ${players.length} players matching "${playerName}":`);
-    players.forEach(p => {
-      console.log(`  - ${p.firstName} ${p.lastName}: ladderId=${p.ladderId?._id}, ladderName=${p.ladderId?.name}, fargo=${p.fargoRate}, position=${p.position}`);
-    });
 
     if (!players || players.length === 0) {
       return res.status(404).json({

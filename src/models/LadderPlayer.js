@@ -253,6 +253,41 @@ ladderPlayerSchema.methods.comparePin = async function(candidatePin) {
   return this.pin === candidatePin;
 };
 
+// Method to set immunity for a specified number of days
+ladderPlayerSchema.methods.setImmunity = function(days = 7) {
+  this.immunityUntil = new Date();
+  this.immunityUntil.setDate(this.immunityUntil.getDate() + days);
+  return this.save();
+};
+
+// Method to clear immunity
+ladderPlayerSchema.methods.clearImmunity = function() {
+  this.immunityUntil = null;
+  return this.save();
+};
+
+// Method to check if player currently has immunity
+ladderPlayerSchema.methods.hasImmunity = function() {
+  return this.immunityUntil && this.immunityUntil > new Date();
+};
+
+// Method to get immunity status info
+ladderPlayerSchema.methods.getImmunityInfo = function() {
+  if (!this.immunityUntil) {
+    return { hasImmunity: false, expiresAt: null, daysRemaining: 0 };
+  }
+  
+  const now = new Date();
+  const expiresAt = this.immunityUntil;
+  const daysRemaining = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
+  
+  return {
+    hasImmunity: expiresAt > now,
+    expiresAt: expiresAt,
+    daysRemaining: Math.max(0, daysRemaining)
+  };
+};
+
 const LadderPlayer = mongoose.model('LadderPlayer', ladderPlayerSchema);
 
 export default LadderPlayer;

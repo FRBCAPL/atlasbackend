@@ -954,6 +954,11 @@ router.patch('/matches/:id/complete', async (req, res) => {
         console.log(`🔄 Ladder positions updated: ${winner.firstName} ${winner.lastName} (challenger) moved from #${tempPosition} to #${winner.position}, ${loser.firstName} ${loser.lastName} (defender) moved from #${winner.position} to #${loser.position}`);
       }
       
+      // 🛡️ AUTOMATIC IMMUNITY: Set immunity for the winner
+      // Winner gets 7 days of immunity from challenges
+      await winner.setImmunity(7);
+      console.log(`🛡️ Immunity set: ${winner.firstName} ${winner.lastName} is now immune from challenges for 7 days`);
+      
       await winner.save();
       await loser.save();
       
@@ -1241,6 +1246,105 @@ router.get('/admin/:ladderName', async (req, res) => {
   } catch (error) {
     console.error('Error fetching ladder admin data:', error);
     res.status(500).json({ error: 'Failed to fetch ladder admin data' });
+  }
+});
+
+// Admin override: Set/clear player immunity
+router.put('/admin/player/:playerId/immunity', async (req, res) => {
+  try {
+    const { playerId } = req.params;
+    const { action, days = 7 } = req.body; // action: 'set', 'clear', or 'extend'
+    
+    const player = await LadderPlayer.findById(playerId);
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    
+    let message = '';
+    
+    switch (action) {
+      case 'set':
+        await player.setImmunity(days);
+        message = `Immunity set for ${player.firstName} ${player.lastName} for ${days} days`;
+        break;
+        
+      case 'clear':
+        await player.clearImmunity();
+        message = `Immunity cleared for ${player.firstName} ${player.lastName}`;
+        break;
+        
+      case 'extend':
+        if (player.immunityUntil && player.immunityUntil > new Date()) {
+          // Extend existing immunity
+          const currentExpiry = new Date(player.immunityUntil);
+          currentExpiry.setDate(currentExpiry.getDate() + days);
+          player.immunityUntil = currentExpiry;
+          await player.save();
+          message = `Immunity extended for ${player.firstName} ${player.lastName} by ${days} days`;
+        } else {
+          // Set new immunity if none exists
+          await player.setImmunity(days);
+          message = `Immunity set for ${player.firstName} ${player.lastName} for ${days} days`;
+        }
+        break;
+        
+      default:
+        return res.status(400).json({ error: 'Invalid action. Use "set", "clear", or "extend"' });
+    }
+    
+    console.log(`🔧 Admin immunity override: ${message}`);
+    
+    res.json({
+      success: true,
+      message,
+      player: {
+        id: player._id,
+        name: `${player.firstName} ${player.lastName}`,
+        immunityUntil: player.immunityUntil,
+        immunityInfo: player.getImmunityInfo()
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error updating player immunity:', error);
+    res.status(500).json({ error: 'Failed to update player immunity' });
+  }
+});
+
+// Admin override: Set/clear player active status
+router.put('/admin/player/:playerId/status', async (req, res) => {
+  try {
+    const { playerId } = req.params;
+    const { isActive } = req.body;
+    
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({ error: 'isActive must be a boolean value' });
+    }
+    
+    const player = await LadderPlayer.findById(playerId);
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+    
+    player.isActive = isActive;
+    await player.save();
+    
+    const message = `${player.firstName} ${player.lastName} ${isActive ? 'activated' : 'deactivated'}`;
+    console.log(`🔧 Admin status override: ${message}`);
+    
+    res.json({
+      success: true,
+      message,
+      player: {
+        id: player._id,
+        name: `${player.firstName} ${player.lastName}`,
+        isActive: player.isActive
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error updating player status:', error);
+    res.status(500).json({ error: 'Failed to update player status' });
   }
 });
 
@@ -1858,8 +1962,13 @@ router.put('/:leagueId/ladders/:ladderId/matches/:matchId', async (req, res) => 
     loserPlayer.losses = (loserPlayer.losses || 0) + 1;
     loserPlayer.totalMatches = (loserPlayer.totalMatches || 0) + 1;
 
-      await winnerPlayer.save();
-      await loserPlayer.save();
+    // 🛡️ AUTOMATIC IMMUNITY: Set immunity for the winner (admin match update)
+    // Winner gets 7 days of immunity from challenges
+    await winnerPlayer.setImmunity(7);
+    console.log(`🛡️ Immunity set (admin): ${winnerPlayer.firstName} ${winnerPlayer.lastName} is now immune from challenges for 7 days`);
+
+    await winnerPlayer.save();
+    await loserPlayer.save();
     }
 
     // Save the match regardless of whether winner was set

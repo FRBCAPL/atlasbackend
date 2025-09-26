@@ -550,13 +550,29 @@ router.post('/challenge', async (req, res) => {
     } = req.body;
     
     // Get players - try by email first, then by name if email lookup fails
-    let challenger = await LadderPlayer.getPlayerByEmail(challengerEmail);
-    let defender = await LadderPlayer.getPlayerByEmail(defenderEmail);
+    let challenger = null;
+    let defender = null;
     
-    // If not found by email, try to find by name (for players without email addresses)
+    // Try to find challenger by email first (if email is provided and valid)
+    if (challengerEmail && challengerEmail.includes('@')) {
+      challenger = await LadderPlayer.getPlayerByEmail(challengerEmail);
+    }
+    
+    // If not found by email, try to find by name
     if (!challenger) {
-      // Try to find by name if email lookup failed
-      const [firstName, lastName] = challengerEmail.split('@')[0].split('.');
+      // Try to find by name if email lookup failed or no email provided
+      let firstName, lastName;
+      
+      if (challengerEmail && challengerEmail.includes('@')) {
+        // Parse from email format (firstname.lastname@domain.com)
+        [firstName, lastName] = challengerEmail.split('@')[0].split('.');
+      } else if (challengerEmail) {
+        // Treat as name directly (firstname lastname)
+        const nameParts = challengerEmail.trim().split(' ');
+        firstName = nameParts[0];
+        lastName = nameParts.slice(1).join(' ');
+      }
+      
       if (firstName && lastName) {
         challenger = await LadderPlayer.findOne({
           firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
@@ -566,9 +582,26 @@ router.post('/challenge', async (req, res) => {
       }
     }
     
+    // Try to find defender by email first (if email is provided and valid)
+    if (defenderEmail && defenderEmail.includes('@')) {
+      defender = await LadderPlayer.getPlayerByEmail(defenderEmail);
+    }
+    
+    // If not found by email, try to find by name
     if (!defender) {
-      // Try to find by name if email lookup failed
-      const [firstName, lastName] = defenderEmail.split('@')[0].split('.');
+      // Try to find by name if email lookup failed or no email provided
+      let firstName, lastName;
+      
+      if (defenderEmail && defenderEmail.includes('@')) {
+        // Parse from email format (firstname.lastname@domain.com)
+        [firstName, lastName] = defenderEmail.split('@')[0].split('.');
+      } else if (defenderEmail) {
+        // Treat as name directly (firstname lastname)
+        const nameParts = defenderEmail.trim().split(' ');
+        firstName = nameParts[0];
+        lastName = nameParts.slice(1).join(' ');
+      }
+      
       if (firstName && lastName) {
         defender = await LadderPlayer.findOne({
           firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
@@ -579,7 +612,21 @@ router.post('/challenge', async (req, res) => {
     }
     
     if (!challenger || !defender) {
-      return res.status(404).json({ error: 'Player not found' });
+      console.error('Player lookup failed:', {
+        challengerEmail,
+        defenderEmail,
+        challengerFound: !!challenger,
+        defenderFound: !!defender
+      });
+      return res.status(404).json({ 
+        error: 'Player not found',
+        details: {
+          challengerFound: !!challenger,
+          defenderFound: !!defender,
+          challengerEmail,
+          defenderEmail
+        }
+      });
     }
     
     // Ensure players have email addresses for challenge creation
@@ -688,7 +735,12 @@ router.post('/challenge', async (req, res) => {
     res.status(201).json(challenge);
   } catch (error) {
     console.error('Error creating challenge:', error);
-    res.status(500).json({ error: 'Failed to create challenge' });
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ 
+      error: 'Failed to create challenge',
+      details: error.message,
+      type: error.name
+    });
   }
 });
 

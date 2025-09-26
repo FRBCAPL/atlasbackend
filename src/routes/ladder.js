@@ -887,6 +887,178 @@ router.post('/challenge/:challengeId/counter-proposal', async (req, res) => {
   }
 });
 
+// Admin Match Management Endpoints
+// Get all matches for admin management
+router.get('/matches', async (req, res) => {
+  try {
+    console.log('🗑️ Backend: Fetching all matches for admin/calendar');
+    const matches = await LadderMatch.find({})
+      .populate('player1', 'firstName lastName')
+      .populate('player2', 'firstName lastName')
+      .populate('winner', 'firstName lastName')
+      .populate('loser', 'firstName lastName')
+      .sort({ completedDate: -1 });
+
+    console.log('🗑️ Backend: Found', matches.length, 'matches');
+    
+    // Add cache-busting headers
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Last-Modified': new Date().toUTCString()
+    });
+    
+    res.json(matches);
+  } catch (error) {
+    console.error('Error fetching matches:', error);
+    res.status(500).json({ error: 'Failed to fetch matches' });
+  }
+});
+
+// Update a match (admin only)
+router.put('/matches/:matchId', async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const { player1, player2, winner, score, scheduledDate, completedDate, status } = req.body;
+
+    const match = await LadderMatch.findById(matchId);
+    if (!match) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    // Store old values for stats reversal
+    const oldWinner = match.winner;
+    const oldLoser = match.loser;
+    const oldStatus = match.status;
+
+    // Update match
+    match.player1 = player1;
+    match.player2 = player2;
+    match.winner = winner;
+    match.score = score;
+    match.scheduledDate = scheduledDate ? new Date(scheduledDate) : match.scheduledDate;
+    match.completedDate = completedDate ? new Date(completedDate) : match.completedDate;
+    match.status = status;
+
+    // If changing from completed to something else, reverse old stats
+    if (oldStatus === 'completed' && status !== 'completed' && oldWinner && oldLoser) {
+      const winnerPlayer = await LadderPlayer.findById(oldWinner);
+      const loserPlayer = await LadderPlayer.findById(oldLoser);
+
+      if (winnerPlayer) {
+        winnerPlayer.wins = Math.max((winnerPlayer.wins || 0) - 1, 0);
+        winnerPlayer.totalMatches = Math.max((winnerPlayer.totalMatches || 0) - 1, 0);
+        await winnerPlayer.save();
+      }
+
+      if (loserPlayer) {
+        loserPlayer.losses = Math.max((loserPlayer.losses || 0) - 1, 0);
+        loserPlayer.totalMatches = Math.max((loserPlayer.totalMatches || 0) - 1, 0);
+        await loserPlayer.save();
+      }
+    }
+
+    // If changing to completed, update stats
+    if (status === 'completed' && winner) {
+      const winnerPlayer = await LadderPlayer.findById(winner);
+      const loserPlayer = await LadderPlayer.findById(player1 === winner ? player2 : player1);
+
+      if (winnerPlayer) {
+        winnerPlayer.wins = (winnerPlayer.wins || 0) + 1;
+        winnerPlayer.totalMatches = (winnerPlayer.totalMatches || 0) + 1;
+        await winnerPlayer.save();
+      }
+
+      if (loserPlayer) {
+        loserPlayer.losses = (loserPlayer.losses || 0) + 1;
+        loserPlayer.totalMatches = (loserPlayer.totalMatches || 0) + 1;
+        await loserPlayer.save();
+      }
+
+      match.loser = player1 === winner ? player2 : player1;
+    }
+
+    await match.save();
+
+    res.json({
+      success: true,
+      message: 'Match updated successfully',
+      match: match
+    });
+
+  } catch (error) {
+    console.error('Error updating match:', error);
+    res.status(500).json({ error: 'Failed to update match' });
+  }
+});
+
+// Delete a match (admin only)
+router.delete('/matches/:matchId', async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    console.log('🗑️ Backend: Deleting match with ID:', matchId);
+
+    const match = await LadderMatch.findById(matchId);
+    if (!match) {
+      console.log('🗑️ Backend: Match not found:', matchId);
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    console.log('🗑️ Backend: Found match to delete:', {
+      id: match._id,
+      player1: match.player1,
+      player2: match.player2,
+      status: match.status,
+      scheduledDate: match.scheduledDate,
+      completedDate: match.completedDate
+    });
+
+    // If the match is completed, reverse the stats
+    if (match.status === 'completed' && match.winner && match.loser) {
+      console.log('🗑️ Backend: Reversing stats for completed match');
+      const winnerPlayer = await LadderPlayer.findById(match.winner);
+      const loserPlayer = await LadderPlayer.findById(match.loser);
+
+      if (winnerPlayer) {
+        winnerPlayer.wins = Math.max((winnerPlayer.wins || 0) - 1, 0);
+        winnerPlayer.totalMatches = Math.max((winnerPlayer.totalMatches || 0) - 1, 0);
+        await winnerPlayer.save();
+        console.log('🗑️ Backend: Reversed winner stats for:', winnerPlayer.firstName, winnerPlayer.lastName);
+      }
+
+      if (loserPlayer) {
+        loserPlayer.losses = Math.max((loserPlayer.losses || 0) - 1, 0);
+        loserPlayer.totalMatches = Math.max((loserPlayer.totalMatches || 0) - 1, 0);
+        await loserPlayer.save();
+        console.log('🗑️ Backend: Reversed loser stats for:', loserPlayer.firstName, loserPlayer.lastName);
+      }
+    }
+
+    const deleteResult = await LadderMatch.findByIdAndDelete(matchId);
+    console.log('🗑️ Backend: Match deletion result:', deleteResult);
+    
+    // Verify the match was actually deleted
+    const verifyDeletion = await LadderMatch.findById(matchId);
+    console.log('🗑️ Backend: Verification - match still exists?', verifyDeletion ? 'YES' : 'NO');
+    
+    if (verifyDeletion) {
+      console.log('🗑️ Backend: ERROR - Match was not deleted! Still exists:', verifyDeletion._id);
+      return res.status(500).json({ error: 'Match deletion failed - match still exists in database' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Match deleted successfully',
+      deletedMatchId: matchId
+    });
+
+  } catch (error) {
+    console.error('🗑️ Backend: Error deleting match:', error);
+    res.status(500).json({ error: 'Failed to delete match' });
+  }
+});
+
 // Get recent matches
 router.get('/matches/recent', async (req, res) => {
   try {

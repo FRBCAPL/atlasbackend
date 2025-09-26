@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 import MatchSchedulingRequest from '../models/MatchSchedulingRequest.js';
+import { sendMatchSchedulingApprovalEmail, sendMatchSchedulingRejectionEmail, sendMatchSchedulingDefenderNotificationEmail, sendMatchSchedulingPartnerNotificationEmail, sendMatchSchedulingTestEmails, sendTestMatchSchedulingEmails } from '../services/nodemailerService.js';
+import { createMatchSchedulingApprovalNotification, createMatchSchedulingRejectionNotification, createMatchSchedulingDefenderNotification } from '../services/notificationService.js';
 
 // Helper function to check if player recently won a SmackDown as defender
 const checkRecentSmackDownWin = async (playerId, ladderId) => {
@@ -379,10 +381,237 @@ export const approveMatchRequest = async (req, res) => {
 
     console.log(`✅ Match scheduling request approved: ${request.challengerName} vs ${request.defenderName}`);
 
+    // Create LadderMatch record for calendar display
+    try {
+      const LadderMatch = mongoose.model('LadderMatch');
+      const LadderPlayer = mongoose.model('LadderPlayer');
+      
+      // Find the challenger and defender players
+      const challenger = await LadderPlayer.findOne({ 
+        $or: [
+          { email: request.challengerEmail },
+          { 
+            $expr: {
+              $regexMatch: {
+                input: { $concat: ['$firstName', ' ', '$lastName'] },
+                regex: new RegExp(request.challengerName, 'i')
+              }
+            }
+          }
+        ]
+      });
+      
+      const defender = await LadderPlayer.findOne({ 
+        $or: [
+          { email: request.defenderEmail },
+          { 
+            $expr: {
+              $regexMatch: {
+                input: { $concat: ['$firstName', ' ', '$lastName'] },
+                regex: new RegExp(request.defenderName, 'i')
+              }
+            }
+          }
+        ]
+      });
+
+      if (challenger && defender) {
+        // Create a dummy challenge ID for scheduled matches
+        const dummyChallengeId = new mongoose.Types.ObjectId();
+        
+        // Create the LadderMatch record
+        const ladderMatch = new LadderMatch({
+          challengeId: dummyChallengeId, // Required field - using dummy ID for scheduled matches
+          matchType: request.matchType || 'challenge',
+          player1: challenger._id,
+          player2: defender._id,
+          entryFee: 5, // Default $5 entry fee
+          raceLength: request.raceLength || 7, // Use requested race length
+          gameType: request.gameType || '9-ball', // Use requested game type
+          tableSize: '9-foot', // Default table size
+          player1OldPosition: challenger.position || 0,
+          player1NewPosition: challenger.position || 0,
+          player2OldPosition: defender.position || 0,
+          player2NewPosition: defender.position || 0,
+          player1Ladder: challenger.ladderName || '499-under',
+          player2Ladder: defender.ladderName || '499-under',
+          scheduledDate: request.preferredDate,
+          venue: request.location || 'Legends Brews & Cues',
+          status: 'scheduled',
+          notes: request.notes || ''
+        });
+
+        await ladderMatch.save();
+        console.log(`📅 Created LadderMatch record for calendar: ${challenger.firstName} ${challenger.lastName} vs ${defender.firstName} ${defender.lastName}`);
+        
+        // Store the created match ID for the response
+        request.createdMatchId = ladderMatch._id;
+      } else {
+        console.log('⚠️ Could not find challenger or defender players to create LadderMatch record');
+        if (!challenger) console.log('⚠️ Challenger not found:', request.challengerName, request.challengerEmail);
+        if (!defender) console.log('⚠️ Defender not found:', request.defenderName, request.defenderEmail);
+      }
+    } catch (matchError) {
+      console.error('❌ Error creating LadderMatch record:', matchError);
+      // Don't fail the approval if match creation fails
+    }
+
+    // Send approval email
+    try {
+      const emailData = {
+        challengerName: request.challengerName,
+        challengerEmail: request.challengerEmail,
+        defenderName: request.defenderName,
+        matchType: request.matchType,
+        gameType: request.gameType,
+        raceLength: request.raceLength,
+        preferredDate: request.preferredDate.toLocaleDateString('en-US', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        }),
+        preferredTime: request.preferredTime,
+        location: request.location,
+        notes: request.notes,
+        app_url: process.env.FRONTEND_URL || 'http://localhost:5173'
+      };
+
+      const emailResult = await sendMatchSchedulingApprovalEmail(emailData);
+      if (emailResult.success) {
+        console.log('📧 Approval email sent successfully');
+      } else {
+        console.error('📧 Failed to send approval email:', emailResult.error);
+      }
+    } catch (emailError) {
+      console.error('📧 Error sending approval email:', emailError);
+    }
+
+    // Send notification email to defender (if they have an email)
+    if (request.defenderEmail) {
+      try {
+        const defenderEmailData = {
+          challengerName: request.challengerName,
+          challengerEmail: request.challengerEmail,
+          defenderName: request.defenderName,
+          defenderEmail: request.defenderEmail,
+          matchType: request.matchType,
+          gameType: request.gameType,
+          raceLength: request.raceLength,
+          preferredDate: request.preferredDate.toLocaleDateString('en-US', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          }),
+          preferredTime: request.preferredTime,
+          location: request.location,
+          notes: request.notes,
+          app_url: process.env.FRONTEND_URL || 'http://localhost:5173'
+        };
+
+        const defenderEmailResult = await sendMatchSchedulingDefenderNotificationEmail(defenderEmailData);
+        if (defenderEmailResult.success) {
+          console.log('📧 Defender notification email sent successfully');
+        } else {
+          console.error('📧 Failed to send defender notification email:', defenderEmailResult.error);
+        }
+      } catch (defenderEmailError) {
+        console.error('📧 Error sending defender notification email:', defenderEmailError);
+      }
+    } else {
+      console.log('📧 No defender email available, skipping defender notification');
+    }
+
+    // Create in-app notification
+    try {
+      const notificationResult = await createMatchSchedulingApprovalNotification(request);
+      if (notificationResult.success) {
+        console.log('📱 Approval notification created successfully');
+      } else {
+        console.error('📱 Failed to create approval notification:', notificationResult.error);
+      }
+    } catch (notificationError) {
+      console.error('📱 Error creating approval notification:', notificationError);
+    }
+
+    // Create in-app notification for defender (if they have an email)
+    if (request.defenderEmail) {
+      try {
+        const defenderNotificationResult = await createMatchSchedulingDefenderNotification(request);
+        if (defenderNotificationResult.success) {
+          console.log('📱 Defender notification created successfully');
+        } else {
+          console.error('📱 Failed to create defender notification:', defenderNotificationResult.error);
+        }
+      } catch (defenderNotificationError) {
+        console.error('📱 Error creating defender notification:', defenderNotificationError);
+      }
+    } else {
+      console.log('📱 No defender email available, skipping defender notification');
+    }
+
+    // Send match notification email to Don (Cueless partner)
+    try {
+      const partnerEmail = 'sacodo752@gmail.com';
+      
+      const partnerEmailData = {
+        partnerEmail: partnerEmail,
+        challengerName: request.challengerName,
+        defenderName: request.defenderName,
+        matchType: request.matchType,
+        preferredDate: request.preferredDate.toLocaleDateString('en-US', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        }),
+        preferredTime: request.preferredTime,
+        location: request.location,
+        notes: request.notes
+      };
+
+      const partnerEmailResult = await sendMatchSchedulingPartnerNotificationEmail(partnerEmailData);
+      if (partnerEmailResult.success) {
+        console.log('📧 Match notification email sent to Don (Cueless partner) successfully');
+      } else {
+        console.error('📧 Failed to send match notification email to Don:', partnerEmailResult.error);
+      }
+    } catch (partnerEmailError) {
+      console.error('📧 Error sending match notification email to Don:', partnerEmailError);
+    }
+
+    // Send test email to sslampro@gmail.com showing all emails that were sent
+    try {
+      const testEmailResult = await sendMatchSchedulingTestEmails(
+        {
+          challengerEmail: request.challengerEmail,
+          defenderName: request.defenderName
+        },
+        {
+          defenderEmail: request.defenderEmail,
+          challengerName: request.challengerName
+        },
+        {
+          challengerName: request.challengerName,
+          defenderName: request.defenderName
+        }
+      );
+      
+      if (testEmailResult.success) {
+        console.log('📧 Test email sent to sslampro@gmail.com successfully');
+      } else {
+        console.error('📧 Failed to send test email to sslampro@gmail.com:', testEmailResult.error);
+      }
+    } catch (testEmailError) {
+      console.error('📧 Error sending test email to sslampro@gmail.com:', testEmailError);
+    }
+
     res.json({
       success: true,
       message: 'Match scheduling request approved successfully',
-      request
+      request,
+      createdMatchId: request.createdMatchId || null
     });
 
   } catch (error) {
@@ -417,6 +646,47 @@ export const rejectMatchRequest = async (req, res) => {
 
     console.log(`❌ Match scheduling request rejected: ${request.challengerName} vs ${request.defenderName}`);
 
+    // Send rejection email
+    try {
+      const emailData = {
+        challengerName: request.challengerName,
+        challengerEmail: request.challengerEmail,
+        defenderName: request.defenderName,
+        matchType: request.matchType,
+        preferredDate: request.preferredDate.toLocaleDateString('en-US', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        }),
+        preferredTime: request.preferredTime,
+        location: request.location,
+        adminNotes: request.adminNotes,
+        app_url: process.env.FRONTEND_URL || 'http://localhost:5173'
+      };
+
+      const emailResult = await sendMatchSchedulingRejectionEmail(emailData);
+      if (emailResult.success) {
+        console.log('📧 Rejection email sent successfully');
+      } else {
+        console.error('📧 Failed to send rejection email:', emailResult.error);
+      }
+    } catch (emailError) {
+      console.error('📧 Error sending rejection email:', emailError);
+    }
+
+    // Create in-app notification
+    try {
+      const notificationResult = await createMatchSchedulingRejectionNotification(request);
+      if (notificationResult.success) {
+        console.log('📱 Rejection notification created successfully');
+      } else {
+        console.error('📱 Failed to create rejection notification:', notificationResult.error);
+      }
+    } catch (notificationError) {
+      console.error('📱 Error creating rejection notification:', notificationError);
+    }
+
     res.json({
       success: true,
       message: 'Match scheduling request rejected',
@@ -432,6 +702,53 @@ export const rejectMatchRequest = async (req, res) => {
   }
 };
 
+// Test endpoint to send sample emails for review
+export const sendTestEmails = async (req, res) => {
+  try {
+    const { testEmail } = req.body;
+    const targetEmail = testEmail || 'sslampro@gmail.com';
+
+    // Sample data for testing
+    const testData = {
+      challengerName: 'John Smith',
+      challengerEmail: 'john@example.com',
+      defenderName: 'Jane Doe',
+      defenderEmail: 'jane@example.com',
+      matchType: 'Challenge',
+      preferredDate: new Date('2024-01-15'),
+      preferredTime: '7:00 PM',
+      location: 'Main Street Pool Hall',
+      notes: 'This is a test match for email review purposes.',
+      testEmail: targetEmail
+    };
+
+    // Send test emails
+    const result = await sendTestMatchSchedulingEmails(testData);
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: `Test emails sent successfully to ${targetEmail}`,
+        emailsSent: result.emailsSent
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to send test emails',
+        error: result.error
+      });
+    }
+
+  } catch (error) {
+    console.error('Error sending test emails:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send test emails',
+      error: error.message
+    });
+  }
+};
+
 export default {
   lookupPlayerAndMatches,
   lookupPlayerByIdAndMatches,
@@ -439,5 +756,6 @@ export default {
   getPendingMatchRequests,
   getAllMatchRequests,
   approveMatchRequest,
-  rejectMatchRequest
+  rejectMatchRequest,
+  sendTestEmails
 };

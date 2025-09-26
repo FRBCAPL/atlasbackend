@@ -6,7 +6,8 @@ import {
   getPendingMatchRequests, 
   getAllMatchRequests, 
   approveMatchRequest, 
-  rejectMatchRequest 
+  rejectMatchRequest,
+  sendTestEmails
 } from '../controllers/matchSchedulingController.js';
 
 const router = express.Router();
@@ -31,5 +32,8 @@ router.post('/:id/approve', approveMatchRequest);
 
 // Reject a match request (admin only)
 router.post('/:id/reject', rejectMatchRequest);
+
+// Send test emails for review (admin only)
+router.post('/test-emails', sendTestEmails);
 
 export default router;

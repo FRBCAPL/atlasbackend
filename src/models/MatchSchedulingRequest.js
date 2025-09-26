@@ -38,6 +38,15 @@ const matchSchedulingSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  gameType: {
+    type: String,
+    enum: ['8-ball', '9-ball', '10-ball', 'mixed'],
+    default: '9-ball'
+  },
+  raceLength: {
+    type: Number,
+    default: 7
+  },
   notes: {
     type: String,
     default: ''

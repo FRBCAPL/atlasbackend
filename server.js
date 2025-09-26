@@ -33,6 +33,8 @@ import fargoUpdaterRoutes from './src/routes/fargoUpdater.js';
 import ladderClaimsRoutes from './src/routes/ladderClaims.js';
 import unifiedSignupRoutes from './src/routes/unifiedSignup.js';
 import matchSchedulingRoutes from './src/routes/matchScheduling.js';
+import notificationRoutes from './src/routes/notifications.js';
+import adminRoutes from './src/routes/admin.js';
 
 // Import models to ensure they are registered with Mongoose
 import './src/models/LadderSignupApplication.js';
@@ -434,6 +436,12 @@ async function startServer() {
   
   // Match scheduling routes
   app.use('/api/match-scheduling', matchSchedulingRoutes);
+  
+  // Notification routes
+  app.use('/api/notifications', notificationRoutes);
+  
+  // Admin routes
+  app.use('/api/admin', adminRoutes);
 
   // Error handling middleware (must be last)
   app.use(errorLogger);

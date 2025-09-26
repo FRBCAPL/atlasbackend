@@ -1,5 +1,5 @@
 import express from 'express';
-import { sendChallengeConfirmationEmail, sendChallengeNotificationEmail, sendCounterProposalEmail } from '../services/nodemailerService.js';
+import { sendChallengeConfirmationEmail, sendChallengeNotificationEmail, sendCounterProposalEmail, sendLadderApplicationApprovalEmail } from '../services/nodemailerService.js';
 
 const router = express.Router();
 
@@ -98,6 +98,39 @@ router.post('/send-counter-proposal', async (req, res) => {
     
   } catch (error) {
     console.error('Error in counter-proposal email route:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Send ladder application approval email
+router.post('/send-ladder-approval', async (req, res) => {
+  try {
+    const emailData = req.body;
+    
+    // Validate required fields
+    if (!emailData.to_email || !emailData.to_name || !emailData.pin) {
+      return res.status(400).json({ 
+        error: 'Missing required email fields: to_email, to_name, pin' 
+      });
+    }
+    
+    const result = await sendLadderApplicationApprovalEmail(emailData);
+    
+    if (result.success) {
+      res.json({ 
+        success: true, 
+        message: 'Ladder application approval email sent successfully',
+        messageId: result.messageId 
+      });
+    } else {
+      res.status(500).json({ 
+        error: 'Failed to send email', 
+        details: result.error 
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error in ladder approval email route:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

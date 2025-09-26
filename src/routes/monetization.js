@@ -7,6 +7,7 @@ import PaymentConfig from '../models/PaymentConfig.js';
 import PendingClaim from '../models/PendingClaim.js';
 import UserCredits from '../models/UserCredits.js';
 import PaymentRecord from '../models/PaymentRecord.js';
+import PromotionalConfig from '../models/PromotionalConfig.js';
 import { 
   createSquarePayment, 
   createSquareCustomer, 
@@ -751,21 +752,46 @@ router.get('/payment-status/:email', async (req, res) => {
   try {
     const { email } = req.params;
     
+    
+    // Check for paid membership
     const membership = await Membership.findOne({ playerId: email });
     
+    // Check if we're in promotional period
+    const isPromotionalPeriod = await PromotionalConfig.isPromotionalPeriod();
+    
+    
+    // If we're in promotional period, grant access to everyone
+    if (isPromotionalPeriod) {
+      return res.json({
+        success: true,
+        hasMembership: true,
+        status: 'promotional_period',
+        isPromotionalPeriod: true,
+        membership: {
+          tier: 'promotional',
+          amount: 0,
+          type: 'promotional_free'
+        }
+      });
+    }
+    
+    // If no promotional period and no paid membership
     if (!membership) {
       return res.json({
         success: true,
         hasMembership: false,
         status: 'no_membership',
+        isPromotionalPeriod: false,
         message: 'No active membership found'
       });
     }
     
+    // Paid membership exists
     res.json({
       success: true,
       hasMembership: true,
       status: membership.status,
+      isPromotionalPeriod: false,
       membership: {
         tier: membership.tier,
         amount: membership.amount,

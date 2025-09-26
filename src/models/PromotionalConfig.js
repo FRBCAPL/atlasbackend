@@ -14,7 +14,7 @@ const promotionalConfigSchema = new mongoose.Schema({
   
   promotionalEndDate: {
     type: Date,
-    default: new Date('2025-10-01T00:00:00.000Z') // October 1st, 2025
+    default: new Date('2025-10-31T23:59:59.999Z') // October 31st, 2025
   },
   
   // Promotional pricing
@@ -37,7 +37,7 @@ const promotionalConfigSchema = new mongoose.Schema({
     }
   },
   
-  // Post-promotional pricing (after Oct 1, 2025)
+  // Post-promotional pricing (after Oct 31, 2025)
   regularPricing: {
     monthlyMembershipFee: {
       type: Number,
@@ -60,13 +60,13 @@ const promotionalConfigSchema = new mongoose.Schema({
   // Prize pool configuration
   prizePoolStartDate: {
     type: Date,
-    default: new Date('2025-10-01T00:00:00.000Z') // Prize pool starts Oct 1, 2025
+    default: new Date('2025-11-01T00:00:00.000Z') // Prize pool starts Nov 1, 2025
   },
   
   // Promotional messaging
   promotionalMessage: {
     type: String,
-    default: '🎉 FREE Monthly Membership until October 1st, 2025! 🎉'
+    default: '🎉 FREE Monthly Membership until October 31st, 2025! 🎉'
   },
   
   // Metadata
@@ -96,8 +96,8 @@ promotionalConfigSchema.statics.getCurrentConfig = async function() {
     config = new this({
       isPromotionalPeriod: true,
       promotionalStartDate: new Date('2024-01-01'),
-      promotionalEndDate: new Date('2025-10-01T00:00:00.000Z'),
-      prizePoolStartDate: new Date('2025-10-01T00:00:00.000Z')
+      promotionalEndDate: new Date('2025-10-31T23:59:59.999Z'),
+      prizePoolStartDate: new Date('2025-11-01T00:00:00.000Z')
     });
     await config.save();
   }

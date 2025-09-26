@@ -69,6 +69,8 @@ const ladderPlayerSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  
+  
   vacationMode: {
     type: Boolean,
     default: false
@@ -287,6 +289,7 @@ ladderPlayerSchema.methods.getImmunityInfo = function() {
     daysRemaining: Math.max(0, daysRemaining)
   };
 };
+
 
 const LadderPlayer = mongoose.model('LadderPlayer', ladderPlayerSchema);
 

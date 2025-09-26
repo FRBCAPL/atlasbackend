@@ -34,24 +34,19 @@ const checkUnifiedAccountStatus = async (firstName, lastName) => {
     
     // Only consider it a valid unified account if:
     // 1. User exists
-    // 2. User is approved
-    // 3. User is active
-    // 4. User has a real email (not empty/null)
-    // 5. User has a proper role (not just a placeholder)
-    // 6. Email is NOT a fake/test email
+    // 2. User has a real email (not empty/null)
+    // 3. Email is NOT a fake/test email
+    // Note: Removed isApproved, isActive, and role checks to be less restrictive
     const isFakeEmail = /@(ladder\.local|ladder\.temp|test|temp|local|fake|example|dummy)/i.test(unifiedUser.email);
     
     if (unifiedUser && 
-        unifiedUser.isApproved && 
-        unifiedUser.isActive && 
         unifiedUser.email && 
         unifiedUser.email.trim() !== '' &&
-        unifiedUser.role === 'player' &&
         !isFakeEmail) {
       return {
         hasUnifiedAccount: true,
-        isApproved: unifiedUser.isApproved,
-        isActive: unifiedUser.isActive,
+        isApproved: unifiedUser.isApproved || false,
+        isActive: unifiedUser.isActive || false,
         email: unifiedUser.email,
         unifiedUserId: unifiedUser._id
       };
@@ -60,14 +55,17 @@ const checkUnifiedAccountStatus = async (firstName, lastName) => {
     // Log why the account is considered invalid
     if (unifiedUser) {
       const reasons = [];
-      if (!unifiedUser.isApproved) reasons.push('not approved');
-      if (!unifiedUser.isActive) reasons.push('not active');
       if (!unifiedUser.email || unifiedUser.email.trim() === '') reasons.push('no email');
-      if (unifiedUser.role !== 'player') reasons.push('wrong role');
       
       // Check for fake emails
       const isFakeEmail = /@(ladder\.local|ladder\.temp|test|temp|local|fake|example|dummy)/i.test(unifiedUser.email);
       if (isFakeEmail) reasons.push('fake email');
+      
+      console.log(`🔍 Unified account validation for ${unifiedUser.firstName} ${unifiedUser.lastName}:`, {
+        hasEmail: !!unifiedUser.email,
+        isFakeEmail: isFakeEmail,
+        reasons: reasons.length > 0 ? reasons : 'none (should be valid)'
+      });
       
       // If it's a fake email, don't return the unifiedUserId
       if (isFakeEmail) {

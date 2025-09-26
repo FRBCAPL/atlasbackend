@@ -616,6 +616,9 @@ export const claimUnifiedAccount = async (req, res) => {
           await ladderPlayer.save();
           console.log(`✅ Updated ladder player email from ${oldEmail} to ${finalEmail}`);
         }
+        
+        // Note: Free access is handled by the promotional period system
+        // No need to start individual free periods
       } else {
         // If no ladderPlayer was found by email, try to find by name and update email
         const ladderPlayerByName = await LadderPlayer.findOne({

@@ -1,5 +1,7 @@
 import express from 'express';
 import {
+  checkExistingPlayer,
+  claimExistingAccounts,
   searchLadderPlayer,
   claimLadderPosition,
   registerNewUser,
@@ -7,6 +9,12 @@ import {
 } from '../controllers/unifiedSignupController.js';
 
 const router = express.Router();
+
+// Check for existing players by name or email
+router.post('/check-existing-player', checkExistingPlayer);
+
+// Claim existing accounts and create unified account
+router.post('/claim-existing-accounts', claimExistingAccounts);
 
 // Search for existing ladder player
 router.post('/search-ladder-player', searchLadderPlayer);

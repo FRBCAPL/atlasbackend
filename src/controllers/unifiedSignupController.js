@@ -5,6 +5,390 @@ import LeagueProfile from '../models/LeagueProfile.js';
 import LadderProfile from '../models/LadderProfile.js';
 import LadderSignupApplication from '../models/LadderSignupApplication.js';
 
+// Check for existing players by name or email
+export const checkExistingPlayer = async (req, res) => {
+  console.log('🔍 checkExistingPlayer function called with:', req.body);
+  try {
+    const { firstName, lastName, email } = req.body;
+
+    if (!firstName || !lastName || !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'First name, last name, and email are required'
+      });
+    }
+
+    const results = {
+      foundPlayers: [],
+      hasExistingPlayers: false,
+      recommendations: []
+    };
+
+    // Search by name in league system
+    const leaguePlayerByName = await User.findOne({
+      firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+      lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+    });
+
+    // Search by email in league system
+    const leaguePlayerByEmail = await User.findOne({
+      email: { $regex: new RegExp(`^${email.toLowerCase().trim()}$`, 'i') }
+    });
+
+    // Check for exact match (both name and email)
+    if (leaguePlayerByName && leaguePlayerByEmail && 
+        leaguePlayerByName._id.toString() === leaguePlayerByEmail._id.toString()) {
+      results.foundPlayers.push({
+        system: 'league',
+        player: {
+          firstName: leaguePlayerByName.firstName,
+          lastName: leaguePlayerByName.lastName,
+          email: leaguePlayerByName.email,
+          phone: leaguePlayerByName.phone,
+          isApproved: leaguePlayerByName.isApproved,
+          isActive: leaguePlayerByName.isActive,
+          divisions: leaguePlayerByName.divisions || []
+        }
+      });
+      results.hasExistingPlayers = true;
+    } else if (leaguePlayerByName || leaguePlayerByEmail) {
+      // Partial match found - determine specific mismatch
+      results.hasPartialMatch = true;
+      
+      if (leaguePlayerByEmail && !leaguePlayerByName) {
+        // Email found but name doesn't match
+        results.partialMatchWarning = `Email found in system, but name doesn't match. Please use the name that matches this email on record or contact admin for assistance.`;
+        results.emailFound = true;
+        results.emailMatchPlayer = {
+          firstName: leaguePlayerByEmail.firstName,
+          lastName: leaguePlayerByEmail.lastName,
+          email: leaguePlayerByEmail.email
+        };
+      } else if (leaguePlayerByName && !leaguePlayerByEmail) {
+        // Name found but email doesn't match
+        results.partialMatchWarning = `Name found in system, but email doesn't match. Please use the correct email or contact admin for assistance.`;
+        results.nameFound = true;
+        results.nameMatchPlayer = {
+          firstName: leaguePlayerByName.firstName,
+          lastName: leaguePlayerByName.lastName,
+          email: leaguePlayerByName.email
+        };
+      } else {
+        // Both found but different players
+        results.partialMatchWarning = 'We found accounts with similar information, but the name and email don\'t match exactly. Please verify your information or contact support.';
+      }
+    }
+
+    // Search by name in ladder system
+    const ladderPlayerByName = await LadderPlayer.findOne({
+      firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+      lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+    });
+
+    // Search by email in ladder system
+    const ladderPlayerByEmail = await LadderPlayer.findOne({
+      email: { $regex: new RegExp(`^${email.toLowerCase().trim()}$`, 'i') }
+    });
+
+    // Check for exact match (both name and email)
+    if (ladderPlayerByName && ladderPlayerByEmail && 
+        ladderPlayerByName._id.toString() === ladderPlayerByEmail._id.toString()) {
+      results.foundPlayers.push({
+        system: 'ladder',
+        player: {
+          firstName: ladderPlayerByName.firstName,
+          lastName: ladderPlayerByName.lastName,
+          email: ladderPlayerByName.email,
+          phone: ladderPlayerByName.phone,
+          position: ladderPlayerByName.position,
+          ladderName: ladderPlayerByName.ladderName,
+          fargoRate: ladderPlayerByName.fargoRate,
+          isActive: ladderPlayerByName.isActive
+        }
+      });
+      results.hasExistingPlayers = true;
+    } else if (ladderPlayerByName || ladderPlayerByEmail) {
+      // Partial match found - determine specific mismatch
+      results.hasPartialMatch = true;
+      
+      if (ladderPlayerByEmail && !ladderPlayerByName) {
+        // Email found but name doesn't match
+        if (!results.partialMatchWarning) {
+          results.partialMatchWarning = `Email found in system, but name doesn't match. Please use the name that matches this email on record or contact admin for assistance.`;
+        } else {
+          results.partialMatchWarning += ` Also found in ladder system with this email.`;
+        }
+        results.emailFound = true;
+        results.emailMatchPlayer = {
+          firstName: ladderPlayerByEmail.firstName,
+          lastName: ladderPlayerByEmail.lastName,
+          email: ladderPlayerByEmail.email
+        };
+      } else if (ladderPlayerByName && !ladderPlayerByEmail) {
+        // Name found but email doesn't match
+        if (!results.partialMatchWarning) {
+          results.partialMatchWarning = `Name found in system, but email doesn't match. Please use the correct email or contact admin for assistance.`;
+        } else {
+          results.partialMatchWarning += ` Also found in ladder system with different email.`;
+        }
+        results.nameFound = true;
+        results.nameMatchPlayer = {
+          firstName: ladderPlayerByName.firstName,
+          lastName: ladderPlayerByName.lastName,
+          email: ladderPlayerByName.email
+        };
+      } else if (!results.partialMatchWarning) {
+        // Both found but different players
+        results.partialMatchWarning = 'We found accounts with similar information, but the name and email don\'t match exactly. Please verify your information or contact support.';
+      }
+    }
+
+
+    // Check if unified account already exists - but only if we haven't found partial matches
+    if (!results.hasPartialMatch) {
+      const existingUnifiedUser = await UnifiedUser.findOne({
+        $or: [
+          { 
+            firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+            lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+          },
+          ...(email ? [{ email: { $regex: new RegExp(`^${email.toLowerCase().trim()}$`, 'i') } }] : [])
+        ]
+      });
+
+      if (existingUnifiedUser) {
+        // Check if this is an exact match (both name and email match)
+        const isExactMatch = existingUnifiedUser.firstName.toLowerCase() === firstName.toLowerCase() &&
+                            existingUnifiedUser.lastName.toLowerCase() === lastName.toLowerCase() &&
+                            existingUnifiedUser.email.toLowerCase() === email.toLowerCase().trim();
+        
+        if (isExactMatch) {
+          results.hasUnifiedAccount = true;
+          results.unifiedAccount = {
+            firstName: existingUnifiedUser.firstName,
+            lastName: existingUnifiedUser.lastName,
+            email: existingUnifiedUser.email,
+            isApproved: existingUnifiedUser.isApproved,
+            isActive: existingUnifiedUser.isActive
+          };
+          results.recommendations.push({
+            type: 'existing_unified',
+            message: 'You already have a unified account! Please use your existing login credentials instead of creating a new account.',
+            action: 'use_existing_login'
+          });
+        } else {
+          // Partial match with unified account - treat as partial match
+          results.hasPartialMatch = true;
+          if (existingUnifiedUser.email.toLowerCase() === email.toLowerCase().trim()) {
+            results.partialMatchWarning = 'Email found in system, but name doesn\'t match. Please use the name that matches this email on record or contact admin for assistance.';
+            results.emailFound = true;
+            results.emailMatchPlayer = {
+              firstName: existingUnifiedUser.firstName,
+              lastName: existingUnifiedUser.lastName,
+              email: existingUnifiedUser.email
+            };
+          } else {
+            results.partialMatchWarning = 'Name found in system, but email doesn\'t match. Please use the correct email or contact admin for assistance.';
+            results.nameFound = true;
+            results.nameMatchPlayer = {
+              firstName: existingUnifiedUser.firstName,
+              lastName: existingUnifiedUser.lastName,
+              email: existingUnifiedUser.email
+            };
+          }
+        }
+      }
+    }
+
+    if (results.hasExistingPlayers) {
+      // Generate recommendations based on findings only if no unified account exists
+      const hasLeaguePlayer = results.foundPlayers.some(p => p.system === 'league');
+      const hasLadderPlayer = results.foundPlayers.some(p => p.system === 'ladder');
+
+      if (hasLeaguePlayer && hasLadderPlayer) {
+        results.recommendations.push({
+          type: 'claim_existing',
+          message: 'You already have accounts in both league and ladder systems. You can claim your existing accounts instead of creating new ones.',
+          action: 'claim_accounts'
+        });
+      } else if (hasLeaguePlayer) {
+        results.recommendations.push({
+          type: 'claim_league',
+          message: 'You already have a league account. You can claim it and add ladder access.',
+          action: 'claim_league_add_ladder'
+        });
+      } else if (hasLadderPlayer) {
+        results.recommendations.push({
+          type: 'claim_ladder',
+          message: 'You already have a ladder account. You can claim it and add league access.',
+          action: 'claim_ladder_add_league'
+        });
+      }
+    }
+
+    console.log('🔍 Existing player check results:', results);
+
+    res.json({
+      success: true,
+      ...results
+    });
+
+  } catch (error) {
+    console.error('Error checking existing player:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Claim existing accounts and create unified account
+export const claimExistingAccounts = async (req, res) => {
+  console.log('🔍 claimExistingAccounts function called with:', req.body);
+  try {
+    const { firstName, lastName, email, phone } = req.body;
+
+    if (!firstName || !lastName || !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'First name, last name, and email are required'
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid email address'
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Check if unified account already exists
+    const existingUnifiedUser = await UnifiedUser.findOne({
+      $or: [
+        { email: normalizedEmail },
+        { 
+          firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+          lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+        }
+      ]
+    });
+
+    if (existingUnifiedUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'A unified account already exists for this person'
+      });
+    }
+
+    // Find existing league and ladder accounts
+    const leaguePlayer = await User.findOne({
+      $or: [
+        { 
+          firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+          lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+        },
+        { email: normalizedEmail }
+      ]
+    });
+
+    const ladderPlayer = await LadderPlayer.findOne({
+      $or: [
+        { 
+          firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+          lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+        },
+        { email: normalizedEmail }
+      ]
+    });
+
+    if (!leaguePlayer && !ladderPlayer) {
+      return res.status(404).json({
+        success: false,
+        message: 'No existing accounts found to claim'
+      });
+    }
+
+    // Create unified account
+    const unifiedUser = new UnifiedUser({
+      firstName,
+      lastName,
+      email: normalizedEmail,
+      phone: phone || '',
+      isApproved: true,
+      isActive: true,
+      role: 'player'
+    });
+
+    await unifiedUser.save();
+
+    // Create league profile if league player exists
+    if (leaguePlayer) {
+      const leagueProfile = new LeagueProfile({
+        userId: unifiedUser._id,
+        divisions: leaguePlayer.divisions || [],
+        isActive: leaguePlayer.isActive
+      });
+      await leagueProfile.save();
+
+      // Update league player with unified user reference
+      leaguePlayer.unifiedUserId = unifiedUser._id;
+      await leaguePlayer.save();
+    }
+
+    // Create ladder profile if ladder player exists
+    if (ladderPlayer) {
+      const ladderProfile = new LadderProfile({
+        userId: unifiedUser._id,
+        ladderName: ladderPlayer.ladderName,
+        position: ladderPlayer.position,
+        fargoRate: ladderPlayer.fargoRate,
+        isActive: ladderPlayer.isActive
+      });
+      await ladderProfile.save();
+
+      // Update ladder player with unified user reference
+      ladderPlayer.unifiedUserId = unifiedUser._id;
+      await ladderPlayer.save();
+    }
+
+    console.log(`✅ Unified account created for ${firstName} ${lastName} (${email})`);
+
+    res.json({
+      success: true,
+      message: 'Accounts successfully claimed and unified!',
+      user: {
+        _id: unifiedUser._id,
+        firstName: unifiedUser.firstName,
+        lastName: unifiedUser.lastName,
+        email: unifiedUser.email,
+        pin: unifiedUser.pin,
+        hasLeagueProfile: !!leaguePlayer,
+        hasLadderProfile: !!ladderPlayer,
+        leagueInfo: leaguePlayer ? {
+          divisions: leaguePlayer.divisions,
+          isActive: leaguePlayer.isActive
+        } : null,
+        ladderInfo: ladderPlayer ? {
+          position: ladderPlayer.position,
+          ladderName: ladderPlayer.ladderName,
+          fargoRate: ladderPlayer.fargoRate
+        } : null
+      }
+    });
+
+  } catch (error) {
+    console.error('Error claiming existing accounts:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
 // Search for existing ladder player
 export const searchLadderPlayer = async (req, res) => {
   console.log('🔍 searchLadderPlayer function called with:', req.body);
@@ -279,15 +663,46 @@ export const registerNewUser = async (req, res) => {
       });
     }
 
-    // Check if email is already taken
-    const existingUser = await UnifiedUser.findOne({
+    // Check if email is already taken in any system
+    const existingUnifiedUser = await UnifiedUser.findOne({
       email: { $regex: new RegExp(`^${email}$`, 'i') }
     });
 
-    if (existingUser) {
+    const existingLeagueUser = await User.findOne({
+      email: { $regex: new RegExp(`^${email}$`, 'i') }
+    });
+
+    const existingLadderUser = await LadderPlayer.findOne({
+      email: { $regex: new RegExp(`^${email}$`, 'i') }
+    });
+
+    if (existingUnifiedUser || existingLeagueUser || existingLadderUser) {
       return res.status(400).json({
         success: false,
-        message: 'Email address is already in use'
+        message: 'Email address is already in use. Please use a different email or contact admin if you believe this is an error.'
+      });
+    }
+
+    // Check if name is already taken in any system
+    const existingUnifiedByName = await UnifiedUser.findOne({
+      firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+      lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+    });
+
+    const existingLeagueByName = await User.findOne({
+      firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+      lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+    });
+
+    const existingLadderByName = await LadderPlayer.findOne({
+      firstName: { $regex: new RegExp(`^${firstName}$`, 'i') },
+      lastName: { $regex: new RegExp(`^${lastName}$`, 'i') }
+    });
+
+    if (existingUnifiedByName || existingLeagueByName || existingLadderByName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name is already in use. Please use a different name or contact admin if you believe this is an error.'
       });
     }
 
